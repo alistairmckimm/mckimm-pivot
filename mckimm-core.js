@@ -3236,6 +3236,7 @@ function highlightSide(){
 function render(){
   highlightSide();
   updateRemindersBadge();
+  updateComplianceBadge();
   const m = document.getElementById("main");
   if (window.CUSTOM_VIEWS && window.CUSTOM_VIEWS[route.view]){
     return window.CUSTOM_VIEWS[route.view](m);
@@ -3244,6 +3245,7 @@ function render(){
     case "dashboard": return m.innerHTML = renderDashboard();
     case "myday": return m.innerHTML = renderMyDay();
     case "reminders": return m.innerHTML = renderReminders();
+    case "compliance": return m.innerHTML = renderCompliance();
     case "templates": return m.innerHTML = renderTemplates();
     case "template":  return renderTemplate(m);
     case "register":  return m.innerHTML = renderRegister();
@@ -3479,7 +3481,7 @@ function renderReminders(){
   return `
     <div class="crumbs"><span>McKimm Civil Pty Ltd</span><span class="sep">›</span><span>Reminders</span></div>
     <h1 class="page-title">Reminders</h1>
-    <div class="notice notice-info" style="margin-bottom:18px">This is an in-app dashboard, not a push notification — McKimm Pivot has no server, so nothing can notify you while the app is closed. Check this page whenever you open the app. It scans due/expiry dates already captured on submitted forms: Fire Extinguisher inspections (next inspection + per-unit expiry), PPE expiry, HR licence expiry, and Asset Inventory service/calibration-due dates. It doesn't yet track things with no form field behind them, like insurance renewals — say the word if you'd like a standalone Compliance Register added for those.</div>
+    <div class="notice notice-info" style="margin-bottom:18px">This is an in-app dashboard, not a push notification — McKimm Pivot has no server, so nothing can notify you while the app is closed. Check this page whenever you open the app. It scans due/expiry dates already captured on submitted forms: Fire Extinguisher inspections (next inspection + per-unit expiry), PPE expiry, HR licence expiry, and Asset Inventory service/calibration-due dates. For recurring ISO/WHS checks — weekly safety inspections, monthly permit checks, 6-monthly fire extinguisher service and the like — see the <a href="#compliance" onclick="nav('compliance');return false" style="text-decoration:underline">Compliance</a> page instead; that one works out "last done" from submitted forms rather than a typed-in date.</div>
 
     <div class="stat-grid">
       <div class="stat"><div class="num" style="color:var(--bad)">${overdue.length}</div><div class="lbl">Overdue</div></div>
@@ -3495,6 +3497,124 @@ function renderReminders(){
 
     <h2 class="section-title">Upcoming</h2>
     <div class="list"><table><thead><tr><th>Item</th><th>Due</th><th>When</th><th>Status</th></tr></thead><tbody>${rows(upcoming)}</tbody></table></div>
+  `;
+}
+
+/* ============================================================
+   VIEW: Compliance — recurring ISO 9001/14001/45001 & WHS checks
+   Added 2026-09-01 at Al's request. Distinct from the reminders
+   above: those only fire from due/expiry DATES already typed
+   into submitted forms. This tracks "how long since this
+   template was last done", project by project, plus a set of
+   company-wide (non-project) items like fire extinguishers.
+   No separate bookkeeping/tick-list: "last done" is read
+   straight off STATE.forms, so submitting the real form resets
+   the clock. Cadences are a draft researched against AS1851 /
+   Safe Work Australia / general ISO guidance — see
+   McKimm-ISO-Compliance-Calendar.xlsx for the full workup and
+   sources; edit the cadenceDays/scope below once Al has been
+   through that sheet.
+   ============================================================ */
+const RECURRING_COMPLIANCE = [
+  { key:"safety-inspection", templateId:"MCK-Safety-Inspection", scope:"project", projectField:"project",     cadenceDays:7,    label:"Safety Inspection Checklist" },
+  { key:"enviro-monitor",    templateId:"MCK-Enviro-Monitor",    scope:"project", projectField:"project",     cadenceDays:7,    label:"Environmental Monitoring" },
+  { key:"safety-monitor",    templateId:"MCK-Safety-Monitor",    scope:"project", projectField:"project",     cadenceDays:7,    label:"Safety Monitoring" },
+  { key:"water-quality",     templateId:"MCK-Enviro-Water",      scope:"project", projectField:"wq_location", cadenceDays:7,    label:"Water Quality Monitoring" },
+  { key:"permits-check",     templateId:"MCK-Permits-Site",      scope:"project", projectField:"project",     cadenceDays:30,   label:"Site Permits Check" },
+  { key:"enviro-risk",       templateId:"MCK-Enviro-SiteRisk",   scope:"project", projectField:"eri_project", cadenceDays:30,   label:"Environmental Risk Inspection" },
+  { key:"asbestos-register", templateId:"MCK-Asbestos-R",        scope:"project", projectField:"project",     cadenceDays:1825, label:"Asbestos Register Review" },
+  { key:"toolbox-fatigue",   templateId:"MCK-Toolbox-Fatigue",   scope:"company", cadenceDays:7,   label:"Toolbox Talk — Fatigue" },
+  { key:"fire-ext-visual",   templateId:"MCK-Ins-Extinguisher",  scope:"company", cadenceDays:30,  label:"Fire Extinguisher — Monthly Visual Check" },
+  { key:"fire-ext-service",  templateId:"MCK-Ins-Extinguisher",  scope:"company", cadenceDays:180, label:"Fire Extinguisher — 6-Monthly Technician Service (AS1851)" },
+  { key:"asset-inventory",   templateId:"MCK-Inv-001",           scope:"company", cadenceDays:90,  label:"Asset Inventory Stocktake" },
+];
+
+function complianceLastForm(item, projectValue){
+  const matches = STATE.forms.filter(f=>{
+    if (f.templateId !== item.templateId) return false;
+    if (item.scope==="project" && item.projectField) return f.data?.[item.projectField]===projectValue;
+    return true;
+  });
+  if (!matches.length) return null;
+  return matches.reduce((a,b)=> (b.createdAt||0) > (a.createdAt||0) ? b : a);
+}
+function complianceStatus(item, projectValue){
+  const last = complianceLastForm(item, projectValue);
+  const now = Date.now();
+  const dueTs = last ? last.createdAt + item.cadenceDays*86400000 : now;
+  const daysLeft = Math.ceil((dueTs-now)/86400000);
+  const status = !last ? "never" : (daysLeft<0 ? "overdue" : (daysLeft<=2 ? "soon" : "ok"));
+  return {...item, projectValue, last, dueTs, daysLeft, status};
+}
+function projectComplianceList(projectValue){
+  return RECURRING_COMPLIANCE.filter(i=>i.scope==="project").map(i=>complianceStatus(i, projectValue));
+}
+function companyComplianceList(){
+  return RECURRING_COMPLIANCE.filter(i=>i.scope==="company").map(i=>complianceStatus(i));
+}
+function complianceOverdueCount(){
+  const projTotal = PROJECT_LOCATIONS.filter(p=>p!=="Other (see comments)")
+    .reduce((n,p)=> n + projectComplianceList(p).filter(i=>i.status==="overdue").length, 0);
+  const compTotal = companyComplianceList().filter(i=>i.status==="overdue").length;
+  return projTotal + compTotal;
+}
+function updateComplianceBadge(){
+  const el = document.getElementById("complianceBadge");
+  if (!el) return;
+  const n = complianceOverdueCount();
+  if (n===0){ el.style.display="none"; return; }
+  el.style.display = "inline-block";
+  el.textContent = n;
+  el.classList.add("bad");
+}
+
+function complianceBadgeHtml(item){
+  if (item.status==="overdue") return `<span class="status bad">Overdue ${Math.abs(item.daysLeft)}d</span>`;
+  if (item.status==="never")   return `<span class="status wait">Never done</span>`;
+  if (item.status==="soon")    return `<span class="status wait">Due in ${item.daysLeft}d</span>`;
+  return `<span class="status ok">OK — ${item.daysLeft}d left</span>`;
+}
+function complianceCard(item){
+  const t = templateById(item.templateId);
+  const prefill = (item.scope==="project" && item.projectField)
+    ? `{${item.projectField}:${JSON.stringify(item.projectValue)}}`
+    : `{}`;
+  const lastLine = item.last
+    ? `Last done ${fmtDate(item.last.createdAt)}${item.last.createdBy ? " by "+esc(item.last.createdBy) : ""}`
+    : "Not recorded yet";
+  return `
+    <div class="card" style="cursor:default">
+      <div class="row"><div class="icn">${t?t.icon:"📋"}</div>${complianceBadgeHtml(item)}</div>
+      <div class="title">${esc(item.label)}</div>
+      <div class="sub">${esc(lastLine)}</div>
+      <button class="btn primary" style="margin-top:10px;width:100%" onclick='startForm(${JSON.stringify(item.templateId)}, ${prefill})'>${item.last?"Do it again":"Start"}</button>
+    </div>`;
+}
+
+function renderCompliance(){
+  const company = companyComplianceList().sort((a,b)=>a.dueTs-b.dueTs);
+  const projectOptions = PROJECT_LOCATIONS.filter(p=>p!=="Other (see comments)");
+  const selectedProject = STATE.complianceProject && projectOptions.includes(STATE.complianceProject)
+    ? STATE.complianceProject : projectOptions[0];
+  STATE.complianceProject = selectedProject;
+  const project = projectComplianceList(selectedProject).sort((a,b)=>a.dueTs-b.dueTs);
+
+  return `
+    <div class="crumbs"><span>McKimm Civil Pty Ltd</span><span class="sep">›</span><span>Compliance</span></div>
+    <h1 class="page-title">Compliance</h1>
+    <div class="notice notice-info" style="margin-bottom:18px">Recurring ISO/WHS checks, worked out from what's actually been submitted — no separate tick-list to maintain. Do the form, the clock resets. Cadences below are a draft (AS1851 / Safe Work Australia / ISO general guidance) — see McKimm-ISO-Compliance-Calendar.xlsx to confirm or change any of them.</div>
+
+    <h2 class="section-title">Company-wide</h2>
+    <div class="grid">${company.map(complianceCard).join("")}</div>
+
+    <h2 class="section-title" style="margin-top:26px">By project</h2>
+    <div class="field" style="max-width:380px;margin-bottom:14px">
+      <label>Project</label>
+      <select onchange="STATE.complianceProject=this.value; save(); render();">
+        ${projectOptions.map(p=>`<option ${p===selectedProject?"selected":""}>${esc(p)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="grid">${project.map(complianceCard).join("")}</div>
   `;
 }
 
