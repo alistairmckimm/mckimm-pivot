@@ -102,6 +102,27 @@ const PROJECT_LOCATIONS = [
 ];
 const WEATHER = ["Fine","Overcast","Rain","Wind","Heat","Snow","Frost/Ice"];
 
+/* ---------- Team config (Users & Jobs) ----------
+   USERS and PROJECT_LOCATIONS above are the seed/fallback lists. If
+   team-config.json has been published (Users page -> Add/Remove user,
+   sidebar -> Add/Archive job -> Publish changes to team), its contents
+   overwrite these arrays IN PLACE (splice, not reassignment) so every
+   place already holding a reference to USERS/PROJECT_LOCATIONS -- including
+   template field options built below -- stays in sync. Must run before
+   TEMPLATES is built. See loadTeamConfig()/publishTeamConfig() further
+   down for the fetch/publish side (same GitHub self-publish pattern as
+   OPERATOR_CONFIG). */
+const ARCHIVED_PROJECTS = [];
+const TEAM_CONFIG_CACHE_KEY = "mckimm-team-config-v1";
+let TEAM_CONFIG_DIRTY = false;
+function applyTeamConfig(cfg){
+  if (!cfg) return;
+  if (Array.isArray(cfg.users) && cfg.users.length) USERS.splice(0, USERS.length, ...cfg.users);
+  if (Array.isArray(cfg.projects) && cfg.projects.length) PROJECT_LOCATIONS.splice(0, PROJECT_LOCATIONS.length, ...cfg.projects);
+  ARCHIVED_PROJECTS.splice(0, ARCHIVED_PROJECTS.length, ...(Array.isArray(cfg.archivedProjects)?cfg.archivedProjects:[]));
+}
+try { applyTeamConfig(JSON.parse(localStorage.getItem(TEAM_CONFIG_CACHE_KEY) || "null")); } catch(e){}
+
 /* Helper that builds the 7 Pre-Start (Heavy Machinery) templates from a
    common structure, since they're identical apart from the machine name. */
 function preStartTemplate(opts){
@@ -3214,6 +3235,60 @@ async function publishOperatorConfig(){
   }
 }
 
+function currentTeamConfig(){
+  return { users: USERS.slice(), projects: PROJECT_LOCATIONS.slice(), archivedProjects: ARCHIVED_PROJECTS.slice() };
+}
+async function loadTeamConfig(){
+  try {
+    const r = await fetch("./team-config.json", { cache:"no-store" });
+    if (r.ok){
+      applyTeamConfig(await r.json());
+      localStorage.setItem(TEAM_CONFIG_CACHE_KEY, JSON.stringify(currentTeamConfig()));
+      if (typeof render === "function") render();
+      if (typeof updateTopbar === "function") updateTopbar();
+    }
+  } catch(e){ /* offline, or first deploy before the file exists -- keep whatever's cached */ }
+}
+async function publishTeamConfig(){
+  const token = (STATE.githubToken||"").trim();
+  if (!token){ toast("Add a GitHub token in Settings first"); return false; }
+  const repo = "alistairmckimm/mckimm-pivot";
+  const path = "team-config.json";
+  try {
+    let sha = null;
+    const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+      headers: { Authorization:`Bearer ${token}`, Accept:"application/vnd.github+json" }
+    });
+    if (getRes.ok){ sha = (await getRes.json()).sha; }
+    else if (getRes.status !== 404){ toast("Publish failed: couldn't check current file ("+getRes.status+")"); return false; }
+    const json = JSON.stringify(currentTeamConfig(), null, 2);
+    const content = btoa(unescape(encodeURIComponent(json)));
+    const body = { message:"Update users/jobs", content };
+    if (sha) body.sha = sha;
+    const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+      method:"PUT",
+      headers: { Authorization:`Bearer ${token}`, Accept:"application/vnd.github+json", "Content-Type":"application/json" },
+      body: JSON.stringify(body)
+    });
+    if (putRes.ok){
+      TEAM_CONFIG_DIRTY = false;
+      return true;
+    }
+    const err = await putRes.json().catch(()=>({}));
+    toast("Publish failed: " + (err.message || putRes.status));
+    return false;
+  } catch(e){
+    toast("Publish failed: " + e.message);
+    return false;
+  }
+}
+async function publishTeam(){
+  const okA = await publishOperatorConfig();
+  const okB = await publishTeamConfig();
+  render();
+  if (okA && okB) toast("Published \u2014 changes go live next time each device opens the app");
+}
+
 /* ---------- Routing ---------- */
 let route = { view:"dashboard", params:{} };
 
@@ -3271,23 +3346,70 @@ function nextFormNumber(tid){
   return existing.length + 1;
 }
 
-/* ---------- Folder tree ---------- */
+/* ---------- Sidebar Jobs list ----------
+   Was a static one-off dump of the old Dashpivot folder tree (decorative
+   only -- clicking never actually filtered anything). Now it's the real,
+   editable job list backed by PROJECT_LOCATIONS / ARCHIVED_PROJECTS --
+   the same lists used as "Project Location" options on every form -- so
+   Add job / Archive job here changes what shows up there too, and
+   publishes via the same "Publish changes to team" button as Users. ---------- */
+let SIDEBAR_SHOWING_ARCHIVED = false;
 function renderFolders(){
   const t = document.getElementById("folderTree");
-  let html = "";
-  FOLDERS.forEach(f=>{
-    html += `<div class="row" onclick="filterByFolder('${esc(f.n)}')"><span class="ic">▸</span> ${esc(f.n)}</div>`;
-    if (f.children){
-      f.children.forEach(c=>{
-        html += `<div class="row child" onclick="filterByFolder('${esc(f.n+" / "+c)}')"><span class="ic">·</span> ${esc(c)}</div>`;
-      });
-    }
-  });
+  if (!t) return;
+  const list = SIDEBAR_SHOWING_ARCHIVED ? ARCHIVED_PROJECTS : PROJECT_LOCATIONS.filter(p=>p!=="Other (see comments)");
+  let html = list.map(p=>`
+    <div class="row" style="justify-content:space-between">
+      <span style="display:flex;align-items:center;gap:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="filterByFolder('${esc(p).replace(/'/g,"\\'")}')"><span class="ic">${SIDEBAR_SHOWING_ARCHIVED?"📦":"▸"}</span> ${esc(p)}</span>
+      <span style="opacity:.55;font-size:12px;flex-shrink:0;cursor:pointer" title="${SIDEBAR_SHOWING_ARCHIVED?"Restore job":"Archive job"}" onclick="event.stopPropagation();${SIDEBAR_SHOWING_ARCHIVED?"restoreJob":"archiveJob"}('${esc(p).replace(/'/g,"\\'")}')">${SIDEBAR_SHOWING_ARCHIVED?"↺":"🗑"}</span>
+    </div>
+  `).join("");
+  if (list.length===0){
+    html = `<div class="row" style="color:var(--muted);cursor:default">${SIDEBAR_SHOWING_ARCHIVED?"No archived jobs":"No jobs yet"}</div>` + html;
+  }
+  if (!SIDEBAR_SHOWING_ARCHIVED){
+    html += `<div class="row" style="color:#1565c0;font-weight:500" onclick="addJob()"><span class="ic">+</span> Add job</div>`;
+  }
   t.innerHTML = html;
 }
 function filterByFolder(path){
   STATE.activeFolder = path; save();
   nav("register");
+}
+function addJob(){
+  showModal("Add job", `
+    <div class="field"><label>Job / project name</label><input type="text" id="newJobName" placeholder="e.g. 45 Kosciuszko Rd, Jindabyne" /></div>
+  `, `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveNewJob()">Add job</button>`);
+}
+function saveNewJob(){
+  const name = (document.getElementById("newJobName").value||"").trim();
+  if (!name) return;
+  if (PROJECT_LOCATIONS.includes(name)){ toast("That job already exists"); return; }
+  const otherIdx = PROJECT_LOCATIONS.indexOf("Other (see comments)");
+  if (otherIdx>-1) PROJECT_LOCATIONS.splice(otherIdx,0,name); else PROJECT_LOCATIONS.push(name);
+  TEAM_CONFIG_DIRTY = true;
+  closeModal(); renderFolders(); render();
+  toast(`Job added \u2014 click "Publish changes to team" on the Users page to push it live`);
+}
+function archiveJob(name){
+  if (!confirm(`Archive "${name}"? It'll drop off the active project list on every device once published \u2014 you can restore it any time.`)) return;
+  const idx = PROJECT_LOCATIONS.indexOf(name);
+  if (idx>-1) PROJECT_LOCATIONS.splice(idx,1);
+  if (!ARCHIVED_PROJECTS.includes(name)) ARCHIVED_PROJECTS.push(name);
+  TEAM_CONFIG_DIRTY = true;
+  renderFolders();
+  toast(`Archived \u2014 click "Publish changes to team" on the Users page to push it live`);
+}
+function restoreJob(name){
+  const idx = ARCHIVED_PROJECTS.indexOf(name);
+  if (idx>-1) ARCHIVED_PROJECTS.splice(idx,1);
+  if (!PROJECT_LOCATIONS.includes(name)){
+    const otherIdx = PROJECT_LOCATIONS.indexOf("Other (see comments)");
+    if (otherIdx>-1) PROJECT_LOCATIONS.splice(otherIdx,0,name); else PROJECT_LOCATIONS.push(name);
+  }
+  TEAM_CONFIG_DIRTY = true;
+  renderFolders();
+  toast(`Restored \u2014 click "Publish changes to team" on the Users page to push it live`);
 }
 
 /* ---------- Sidebar active state ---------- */
@@ -3297,11 +3419,21 @@ function highlightSide(){
   });
 }
 
+function updateTeamBadge(){
+  const el = document.getElementById("teamBadge");
+  if (!el) return;
+  if (!OPERATOR_CONFIG_DIRTY && !TEAM_CONFIG_DIRTY){ el.style.display="none"; return; }
+  el.style.display = "inline-block";
+  el.textContent = "•";
+  el.classList.add("bad");
+}
+
 /* ---------- Render dispatcher ---------- */
 function render(){
   highlightSide();
   updateRemindersBadge();
   updateComplianceBadge();
+  updateTeamBadge();
   const m = document.getElementById("main");
   if (window.CUSTOM_VIEWS && window.CUSTOM_VIEWS[route.view]){
     return window.CUSTOM_VIEWS[route.view](m);
@@ -3900,11 +4032,12 @@ function renderUsers(){
   return `
     <div class="crumbs"><span>McKimm Civil Pty Ltd</span><span class="sep">›</span><span>Users</span></div>
     <h1 class="page-title">Users</h1>
-    <div class="notice notice-info" style="margin-bottom:14px">Tick which projects and templates each operator sees on their phone under <b>Edit access</b>, then hit <b>Publish changes to team</b> once \u2014 that pushes it live to every device, no per-phone setup needed. Anyone left on \"Full access\" sees every project/template plus the Admin/Supervisor menu, same as today.</div>
+    <div class="notice notice-info" style="margin-bottom:14px">Tick which projects and templates each operator sees on their phone under <b>Edit access</b>, then hit <b>Publish changes to team</b> once \u2014 that pushes it live to every device, no per-phone setup needed. Anyone left on \"Full access\" sees every project/template plus the Admin/Supervisor menu, same as today. Jobs are added/archived from the <b>Folders</b> list in the left sidebar \u2014 the Active/Archived tabs at the bottom of it switch between the two.</div>
     <div class="toolbar">
       <div class="grow"></div>
-      ${OPERATOR_CONFIG_DIRTY ? `<span class="status wait" style="margin-right:8px">Unpublished changes</span>` : ``}
-      <button class="btn primary" onclick="publishOperatorConfig().then(()=>render())">Publish changes to team</button>
+      ${(OPERATOR_CONFIG_DIRTY||TEAM_CONFIG_DIRTY) ? `<span class="status wait" style="margin-right:8px">Unpublished changes</span>` : ``}
+      <button class="btn" onclick="addUser()">+ Add user</button>
+      <button class="btn primary" onclick="publishTeam()">Publish changes to team</button>
     </div>
     <div class="list"><table>
       <thead><tr><th>Name</th><th>Role</th><th>Forms Created</th><th>Access</th><th></th></tr></thead>
@@ -3914,12 +4047,36 @@ function renderUsers(){
           <td><span class="status">Employee</span></td>
           <td>${STATE.forms.filter(f=>f.createdBy===u).length}</td>
           <td>${accessSummary(u)}</td>
-          <td><button class="btn sm" onclick="openOperatorAccessEditor('${esc(u).replace(/'/g,"\\'")}')">Edit access</button></td>
+          <td style="white-space:nowrap"><button class="btn sm" onclick="openOperatorAccessEditor('${esc(u).replace(/'/g,"\\'")}')">Edit access</button> <button class="btn sm" onclick="removeUser('${esc(u).replace(/'/g,"\\'")}')">Remove</button></td>
         </tr>`).join("")}
       </tbody></table></div>
   `;
 }
-
+function addUser(){
+  showModal("Add user", `
+    <div class="field"><label>Full name</label><input type="text" id="newUserName" placeholder="e.g. Jamie Smith" /></div>
+  `, `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveNewUser()">Add user</button>`);
+}
+function saveNewUser(){
+  const name = (document.getElementById("newUserName").value||"").trim();
+  if (!name) return;
+  if (USERS.includes(name)){ toast("That user already exists"); return; }
+  USERS.push(name);
+  TEAM_CONFIG_DIRTY = true;
+  closeModal(); render();
+  toast(`Added \u2014 click "Publish changes to team" to push it live`);
+}
+function removeUser(name){
+  if (!confirm(`Remove "${name}" from the team list? Their past forms stay on file \u2014 this only removes them from pick-lists on new forms going forward.`)) return;
+  const idx = USERS.indexOf(name);
+  if (idx>-1) USERS.splice(idx,1);
+  delete OPERATOR_CONFIG[name];
+  TEAM_CONFIG_DIRTY = true;
+  OPERATOR_CONFIG_DIRTY = true;
+  localStorage.setItem(OPERATOR_CONFIG_CACHE_KEY, JSON.stringify(OPERATOR_CONFIG));
+  render();
+  toast(`Removed \u2014 click "Publish changes to team" to push it live`);
+}
 /* ---------- Operator access editor (modal) ---------- */
 function openOperatorAccessEditor(userName){
   const existing = OPERATOR_CONFIG[userName];
@@ -4588,8 +4745,10 @@ function filterFolders(){
 function setArchive(isArchived){
   document.querySelectorAll(".archive-tabs button").forEach(b=>b.classList.remove("on"));
   (event.target.closest("button")||event.target).classList.add("on");
-  toast(isArchived ? "Showing archived" : "Showing active");
+  SIDEBAR_SHOWING_ARCHIVED = isArchived;
+  renderFolders();
 }
+
 function renderCatTree(){
   const el = document.getElementById("catTree");
   if (!el) return;
@@ -4610,3 +4769,4 @@ function renderCatTree(){
    forget \u2014 loadOperatorConfig() re-renders once it lands, so whichever
    view is already showing just updates in place). */
 loadOperatorConfig();
+loadTeamConfig();
