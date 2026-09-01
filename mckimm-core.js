@@ -113,6 +113,7 @@ const WEATHER = ["Fine","Overcast","Rain","Wind","Heat","Snow","Frost/Ice"];
    down for the fetch/publish side (same GitHub self-publish pattern as
    OPERATOR_CONFIG). */
 const ARCHIVED_PROJECTS = [];
+let PROJECT_COMPLIANCE_CONFIG = {};
 const TEAM_CONFIG_CACHE_KEY = "mckimm-team-config-v1";
 let TEAM_CONFIG_DIRTY = false;
 function applyTeamConfig(cfg){
@@ -120,6 +121,7 @@ function applyTeamConfig(cfg){
   if (Array.isArray(cfg.users) && cfg.users.length) USERS.splice(0, USERS.length, ...cfg.users);
   if (Array.isArray(cfg.projects) && cfg.projects.length) PROJECT_LOCATIONS.splice(0, PROJECT_LOCATIONS.length, ...cfg.projects);
   ARCHIVED_PROJECTS.splice(0, ARCHIVED_PROJECTS.length, ...(Array.isArray(cfg.archivedProjects)?cfg.archivedProjects:[]));
+  PROJECT_COMPLIANCE_CONFIG = (cfg.projectCompliance && typeof cfg.projectCompliance==="object") ? cfg.projectCompliance : {};
 }
 try { applyTeamConfig(JSON.parse(localStorage.getItem(TEAM_CONFIG_CACHE_KEY) || "null")); } catch(e){}
 
@@ -3236,7 +3238,7 @@ async function publishOperatorConfig(){
 }
 
 function currentTeamConfig(){
-  return { users: USERS.slice(), projects: PROJECT_LOCATIONS.slice(), archivedProjects: ARCHIVED_PROJECTS.slice() };
+  return { users: USERS.slice(), projects: PROJECT_LOCATIONS.slice(), archivedProjects: ARCHIVED_PROJECTS.slice(), projectCompliance: {...PROJECT_COMPLIANCE_CONFIG} };
 }
 async function loadTeamConfig(){
   try {
@@ -3541,6 +3543,8 @@ function renderDashboard(){
     <div class="crumbs"><span>McKimm Civil Pty Ltd</span><span class="sep">›</span><span>${esc(STATE.activeFolder)}</span></div>
     <h1 class="page-title">Dashboard</h1>
 
+    ${renderComplianceAlertBanner()}
+
     <div class="stat-grid">
       <div class="stat"><div class="num">${total}</div><div class="lbl">Total forms</div></div>
       <div class="stat"><div class="num">${open}</div><div class="lbl">Open / in progress</div></div>
@@ -3743,8 +3747,64 @@ function complianceStatus(item, projectValue){
   const status = !last ? "never" : (daysLeft<0 ? "overdue" : (daysLeft<=2 ? "soon" : "ok"));
   return {...item, projectValue, last, dueTs, daysLeft, status};
 }
+function projectComplianceKeysFor(projectValue){
+  const configured = PROJECT_COMPLIANCE_CONFIG[projectValue];
+  return Array.isArray(configured) ? configured : null; // null = every project-scope item applies (default)
+}
 function projectComplianceList(projectValue){
-  return RECURRING_COMPLIANCE.filter(i=>i.scope==="project").map(i=>complianceStatus(i, projectValue));
+  const keys = projectComplianceKeysFor(projectValue);
+  const items = RECURRING_COMPLIANCE.filter(i=>i.scope==="project");
+  return (keys ? items.filter(i=>keys.includes(i.key)) : items).map(i=>complianceStatus(i, projectValue));
+}
+function cadenceLabel(days){
+  if (days % 365 === 0 && days >= 365) return (days/365)+"yr";
+  if (days % 30 === 0 && days >= 30) return (days/30)+"mo";
+  return days+"d";
+}
+function openProjectComplianceEditor(projectValue){
+  const items = RECURRING_COMPLIANCE.filter(i=>i.scope==="project");
+  const keys = projectComplianceKeysFor(projectValue);
+  const selected = keys || items.map(i=>i.key);
+  const body = `
+    <p class="hint" style="margin-bottom:10px">Tick which recurring checks apply to <b>${esc(projectValue)}</b> \u2014 unticked ones won't show as due here (they still apply to every other project unless you edit those too).</p>
+    ${items.map(i=>`<label style="font-size:13px;display:flex;gap:8px;align-items:flex-start;margin-bottom:8px"><input type="checkbox" class="pc-item" value="${esc(i.key)}" ${selected.includes(i.key)?"checked":""}> <span>${esc(i.label)} <span style="color:var(--muted)">\u2014 every ${cadenceLabel(i.cadenceDays)}</span></span></label>`).join("")}
+  `;
+  const footer = `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveProjectCompliance('${esc(projectValue).replace(/'/g,"\\'")}')">Save</button>`;
+  showModal("Checklist \u2014 " + projectValue, body, footer);
+}
+function saveProjectCompliance(projectValue){
+  const keys = [...document.querySelectorAll(".pc-item:checked")].map(el=>el.value);
+  PROJECT_COMPLIANCE_CONFIG[projectValue] = keys;
+  TEAM_CONFIG_DIRTY = true;
+  closeModal(); render();
+  toast(`Saved \\u2014 click "Publish changes to team" on the Users page to push it live`);
+}
+function complianceAlertItems(){
+  const items = [];
+  companyComplianceList().forEach(i=>{ if (i.status==="overdue"||i.status==="soon") items.push(i); });
+  PROJECT_LOCATIONS.filter(p=>p!=="Other (see comments)").forEach(p=>{
+    projectComplianceList(p).forEach(i=>{ if (i.status==="overdue"||i.status==="soon") items.push(i); });
+  });
+  return items.sort((a,b)=>a.dueTs-b.dueTs);
+}
+function renderComplianceAlertBanner(){
+  if (typeof hasFullAccess === "function" && !hasFullAccess(STATE.currentUser)) return "";
+  const items = complianceAlertItems();
+  if (!items.length) return "";
+  const overdue = items.filter(i=>i.status==="overdue").length;
+  const soon = items.length - overdue;
+  const rows = items.slice(0,6).map(i=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid rgba(0,0,0,.08)">
+      <span style="font-size:13px">${esc(i.label)}${i.projectValue?` <span style="color:var(--muted)">\u2014 ${esc(i.projectValue)}</span>`:""}</span>
+      ${complianceBadgeHtml(i)}
+    </div>`).join("");
+  const more = items.length>6 ? `<div style="font-size:12px;color:var(--muted);margin-top:6px">+ ${items.length-6} more \u2014 see Compliance</div>` : "";
+  return `
+    <div class="notice ${overdue>0?"notice-danger":"notice-warning"}" style="margin-bottom:18px;cursor:pointer" onclick="nav('compliance')">
+      <h3>${overdue>0?"\u26a0 ":""}${items.length} compliance check${items.length===1?"":"s"} need${items.length===1?"s":""} attention \u2014 tap to review</h3>
+      <div>${overdue} overdue${soon?`, ${soon} due soon`:""}</div>
+      ${rows}${more}
+    </div>`;
 }
 function companyComplianceList(){
   return RECURRING_COMPLIANCE.filter(i=>i.scope==="company").map(i=>complianceStatus(i));
@@ -3805,11 +3865,15 @@ function renderCompliance(){
     <div class="grid">${company.map(complianceCard).join("")}</div>
 
     <h2 class="section-title" style="margin-top:26px">By project</h2>
-    <div class="field" style="max-width:380px;margin-bottom:14px">
-      <label>Project</label>
-      <select onchange="STATE.complianceProject=this.value; save(); render();">
-        ${projectOptions.map(p=>`<option ${p===selectedProject?"selected":""}>${esc(p)}</option>`).join("")}
-      </select>
+    <div class="toolbar" style="align-items:flex-end;margin-bottom:14px">
+      <div class="field" style="max-width:380px;margin-bottom:0">
+        <label>Project</label>
+        <select onchange="STATE.complianceProject=this.value; save(); render();">
+          ${projectOptions.map(p=>`<option ${p===selectedProject?"selected":""}>${esc(p)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="grow"></div>
+      <button class="btn" onclick='openProjectComplianceEditor(${JSON.stringify(selectedProject)})'>Edit checklist for this project</button>
     </div>
     <div class="grid">${project.map(complianceCard).join("")}</div>
   `;
