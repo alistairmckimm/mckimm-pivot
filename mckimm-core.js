@@ -3781,28 +3781,36 @@ function saveProjectCompliance(projectValue){
 }
 function complianceAlertItems(){
   const items = [];
-  companyComplianceList().forEach(i=>{ if (i.status==="overdue"||i.status==="soon") items.push(i); });
+  const notOk = i => i.status!=="ok";
+  companyComplianceList().forEach(i=>{ if (notOk(i)) items.push(i); });
   PROJECT_LOCATIONS.filter(p=>p!=="Other (see comments)").forEach(p=>{
-    projectComplianceList(p).forEach(i=>{ if (i.status==="overdue"||i.status==="soon") items.push(i); });
+    projectComplianceList(p).forEach(i=>{ if (notOk(i)) items.push(i); });
   });
-  return items.sort((a,b)=>a.dueTs-b.dueTs);
+  // Overdue first, then never-started, then due-soon; each group oldest/soonest first.
+  const rank = { overdue:0, never:1, soon:2 };
+  return items.sort((a,b)=> (rank[a.status]-rank[b.status]) || (a.dueTs-b.dueTs));
 }
 function renderComplianceAlertBanner(){
   if (typeof hasFullAccess === "function" && !hasFullAccess(STATE.currentUser)) return "";
   const items = complianceAlertItems();
   if (!items.length) return "";
   const overdue = items.filter(i=>i.status==="overdue").length;
-  const soon = items.length - overdue;
+  const never = items.filter(i=>i.status==="never").length;
+  const soon = items.length - overdue - never;
+  const parts = [];
+  if (overdue) parts.push(`${overdue} overdue`);
+  if (never) parts.push(`${never} never done`);
+  if (soon) parts.push(`${soon} due soon`);
   const rows = items.slice(0,6).map(i=>`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid rgba(0,0,0,.08)">
-      <span style="font-size:13px">${esc(i.label)}${i.projectValue?` <span style="color:var(--muted)">\u2014 ${esc(i.projectValue)}</span>`:""}</span>
+      <span style="font-size:13px">${esc(i.label)}${i.projectValue?` <span style="color:var(--muted)">— ${esc(i.projectValue)}</span>`:""}</span>
       ${complianceBadgeHtml(i)}
     </div>`).join("");
-  const more = items.length>6 ? `<div style="font-size:12px;color:var(--muted);margin-top:6px">+ ${items.length-6} more \u2014 see Compliance</div>` : "";
+  const more = items.length>6 ? `<div style="font-size:12px;color:var(--muted);margin-top:6px">+ ${items.length-6} more — see Compliance</div>` : "";
   return `
     <div class="notice ${overdue>0?"notice-danger":"notice-warning"}" style="margin-bottom:18px;cursor:pointer" onclick="nav('compliance')">
-      <h3>${overdue>0?"\u26a0 ":""}${items.length} compliance check${items.length===1?"":"s"} need${items.length===1?"s":""} attention \u2014 tap to review</h3>
-      <div>${overdue} overdue${soon?`, ${soon} due soon`:""}</div>
+      <h3>${overdue>0?"⚠ ":""}${items.length} compliance check${items.length===1?"":"s"} need${items.length===1?"s":""} attention — tap to review</h3>
+      <div>${parts.join(", ")}</div>
       ${rows}${more}
     </div>`;
 }
