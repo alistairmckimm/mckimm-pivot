@@ -424,6 +424,13 @@ function updateTopbar(){
   document.querySelectorAll("#adminDrawer [data-route]").forEach(l=>{
     l.classList.toggle("active", l.dataset.route===route.view);
   });
+  const menuBtn = document.querySelector(".menu-btn");
+  const full = (typeof hasFullAccess === "function") ? hasFullAccess(STATE.currentUser) : true;
+  if (menuBtn) menuBtn.style.display = full ? "" : "none";
+  if (!full){
+    closeAdminDrawer();
+    if (route.view !== "operatorhome" && route.view !== "form") nav("operatorhome");
+  }
 }
 
 /* Wrap core's nav() so EVERY navigation — including ones baked straight
@@ -441,9 +448,30 @@ window.nav = function(view, params={}){
 };
 
 /* ---------- Operator Home ---------- */
+function fieldProjectOptionsFor(userName){
+  const c = OPERATOR_CONFIG[userName];
+  if (c && !c.fullAccess) return (c.projects && c.projects.length) ? c.projects : [];
+  return PROJECT_LOCATIONS;
+}
+function fieldTemplatesFor(userName){
+  // null = unrestricted (today's default quick-start set); array = exactly these template ids
+  const c = OPERATOR_CONFIG[userName];
+  if (c && !c.fullAccess) return c.templates || [];
+  return null;
+}
+function genericPrefillFor(templateId, project){
+  const rc = (typeof RECURRING_COMPLIANCE !== "undefined") ? RECURRING_COMPLIANCE.find(r=>r.templateId===templateId) : null;
+  if (rc && rc.projectField && project) return { [rc.projectField]: project };
+  return {};
+}
 function renderOperatorHome(m){
   const today = todayISO();
-  const machine = MACHINERY.find(x=>x.id===STATE.myDayEquipment);
+  const restrictedTemplates = fieldTemplatesFor(STATE.currentUser);
+  const projectOptions = fieldProjectOptionsFor(STATE.currentUser);
+  if (STATE.fieldProject && !projectOptions.includes(STATE.fieldProject)){ STATE.fieldProject=""; save(); }
+  const availableMachinery = restrictedTemplates ? MACHINERY.filter(x=>restrictedTemplates.includes(x.id)) : MACHINERY;
+  if (STATE.myDayEquipment && !availableMachinery.find(x=>x.id===STATE.myDayEquipment)){ STATE.myDayEquipment=""; save(); }
+  const machine = availableMachinery.find(x=>x.id===STATE.myDayEquipment);
 
   const drForm = STATE.fieldProject ? dailyReportFormFor(STATE.fieldProject, today) : null;
   const tsForm = myDayFormFor("MCK-Daily-Timesheet", "employee", "ts_date");
@@ -464,6 +492,43 @@ function renderOperatorHome(m){
       </div>`;
   }
 
+  let quickCards;
+  if (!restrictedTemplates){
+    quickCards = `
+      ${opCard("📋", "Daily Report", STATE.fieldProject?("For "+STATE.fieldProject):"Select a project above first", drForm,
+        STATE.fieldProject?`startForm('MCK-Daily-Report',{project_location:'${esc(STATE.fieldProject)}', report_date:'${today}'})`:"", !STATE.fieldProject)}
+      ${opCard("⏱", "Employee Timesheet", "Clock in/out self-photos, work breakdown, fatigue check", tsForm,
+        `startForm('MCK-Daily-Timesheet',{employee:'${esc(STATE.currentUser)}', ts_date:'${today}'})`)}
+      ${machine
+        ? opCard("⚙", "Pre-Start Check — "+machine.label, "Required before operating this machine today", psForm,
+            `startForm('${machine.id}',{operator:'${esc(STATE.currentUser)}', inspection_date:'${today}'})`)
+        : `<div class="card op-card" style="cursor:default;display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:24px">Select your equipment above if you're operating machinery today — a Pre-Start check will appear here.</div>`}
+    `;
+  } else {
+    const cards = [];
+    if (restrictedTemplates.includes("MCK-Daily-Report")){
+      cards.push(opCard("📋", "Daily Report", STATE.fieldProject?("For "+STATE.fieldProject):"Select a project above first", drForm,
+        STATE.fieldProject?`startForm('MCK-Daily-Report',{project_location:'${esc(STATE.fieldProject)}', report_date:'${today}'})`:"", !STATE.fieldProject));
+    }
+    if (restrictedTemplates.includes("MCK-Daily-Timesheet")){
+      cards.push(opCard("⏱", "Employee Timesheet", "Clock in/out self-photos, work breakdown, fatigue check", tsForm,
+        `startForm('MCK-Daily-Timesheet',{employee:'${esc(STATE.currentUser)}', ts_date:'${today}'})`));
+    }
+    if (machine && restrictedTemplates.includes(machine.id)){
+      cards.push(opCard("⚙", "Pre-Start Check — "+machine.label, "Required before operating this machine today", psForm,
+        `startForm('${machine.id}',{operator:'${esc(STATE.currentUser)}', inspection_date:'${today}'})`));
+    }
+    restrictedTemplates.forEach(tid=>{
+      if (tid==="MCK-Daily-Report" || tid==="MCK-Daily-Timesheet" || tid.indexOf("MCK-PSM-")===0) return;
+      const t = templateById(tid);
+      if (!t) return;
+      const prefillJson = esc(JSON.stringify(genericPrefillFor(tid, STATE.fieldProject)));
+      cards.push(opCard(t.icon||"▤", t.name, t.code||"", null, `startForm('${tid}', ${prefillJson})`));
+    });
+    quickCards = cards.length ? cards.join("")
+      : `<div class="card op-card" style="cursor:default;display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:24px">No templates assigned to you yet — ask your admin to set your access under Users → Edit access.</div>`;
+  }
+
   m.innerHTML = `
     <h1 class="page-title">G'day, ${esc(STATE.currentUser)}</h1>
     <div class="notice notice-info" style="margin-bottom:16px">Photos taken inside any form below are stamped automatically with the date, time and your name — no extra step needed.</div>
@@ -481,32 +546,25 @@ function renderOperatorHome(m){
         <label>Project / Location today</label>
         <select onchange="STATE.fieldProject=this.value; save(); render();">
           <option value="" ${!STATE.fieldProject?"selected":""}>Select a project…</option>
-          ${PROJECT_LOCATIONS.map(p=>`<option ${p===STATE.fieldProject?"selected":""}>${esc(p)}</option>`).join("")}
+          ${projectOptions.map(p=>`<option ${p===STATE.fieldProject?"selected":""}>${esc(p)}</option>`).join("")}
         </select>
       </div>
       <div class="field" style="margin:0">
         <label>Equipment today</label>
         <select onchange="STATE.myDayEquipment=this.value; save(); render();">
           <option value="" ${!STATE.myDayEquipment?"selected":""}>No machinery / hand tools only</option>
-          ${MACHINERY.map(x=>`<option value="${x.id}" ${x.id===STATE.myDayEquipment?"selected":""}>${esc(x.label)}</option>`).join("")}
+          ${availableMachinery.map(x=>`<option value="${x.id}" ${x.id===STATE.myDayEquipment?"selected":""}>${esc(x.label)}</option>`).join("")}
         </select>
       </div>
     </div>
 
     <h2 class="section-title">Today — ${fmtDate(today)}</h2>
-    <div class="grid">
-      ${opCard("📋", "Daily Report", STATE.fieldProject?("For "+STATE.fieldProject):"Select a project above first", drForm,
-        STATE.fieldProject?`startForm('MCK-Daily-Report',{project_location:'${esc(STATE.fieldProject)}', report_date:'${today}'})`:"", !STATE.fieldProject)}
-      ${opCard("⏱", "Employee Timesheet", "Clock in/out self-photos, work breakdown, fatigue check", tsForm,
-        `startForm('MCK-Daily-Timesheet',{employee:'${esc(STATE.currentUser)}', ts_date:'${today}'})`)}
-      ${machine
-        ? opCard("⚙", "Pre-Start Check — "+machine.label, "Required before operating this machine today", psForm,
-            `startForm('${machine.id}',{operator:'${esc(STATE.currentUser)}', inspection_date:'${today}'})`)
-        : `<div class="card op-card" style="cursor:default;display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:24px">Select your equipment above if you're operating machinery today — a Pre-Start check will appear here.</div>`}
-    </div>
+    <div class="grid">${quickCards}</div>
 
+    ${restrictedTemplates ? `` : `
     <h2 class="section-title">Need something else?</h2>
     <div class="notice">Tap <b>☰</b> above for the full Admin / Supervisor menu — every template, every project, dashboard, reminders, register and more.</div>
+    `}
   `;
 }
 window.CUSTOM_VIEWS = { operatorhome: renderOperatorHome };

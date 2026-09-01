@@ -3141,13 +3141,78 @@ function load(){
     s.activeFolder = s.activeFolder || "Administration";
     s.currentUser = s.currentUser || "Alistair McKimm";
     s.myDayEquipment = s.myDayEquipment || "";
+    s.githubToken = s.githubToken || "";
     return s;
   } catch(e){
-    return { forms:[], activeFolder:"Administration", currentUser:"Alistair McKimm", myDayEquipment:"" };
+    return { forms:[], activeFolder:"Administration", currentUser:"Alistair McKimm", myDayEquipment:"", githubToken:"" };
   }
 }
 function save(){ localStorage.setItem(LS_KEY, JSON.stringify(STATE)); }
 function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+/* ---------- Operator access config (who can see which projects/templates) ----------
+   Lives OUTSIDE localStorage-only STATE: published as operator-templates.json
+   alongside the app on GitHub Pages, so a change made once in McKimm Pivot
+   reaches every operator's phone automatically (next time they open the app),
+   without needing a backend. See renderUsers()/openOperatorAccessEditor()
+   for the editor, publishOperatorConfig() for how it's pushed live.
+   Shape: { "<user name>": { projects:[...], templates:[...], fullAccess:bool } }
+   A user with no entry here gets today's default: every project, the
+   Timesheet/Daily Report/equipment-triggered Pre-Start quick-start set, and
+   full Admin/Supervisor drawer access in McKimm Field. */
+const OPERATOR_CONFIG_CACHE_KEY = "mckimm-operator-config-v1";
+let OPERATOR_CONFIG = {};
+try { OPERATOR_CONFIG = JSON.parse(localStorage.getItem(OPERATOR_CONFIG_CACHE_KEY) || "{}"); } catch(e){ OPERATOR_CONFIG = {}; }
+let OPERATOR_CONFIG_DIRTY = false;
+function hasFullAccess(userName){
+  const c = OPERATOR_CONFIG[userName];
+  return !c || c.fullAccess === true;
+}
+async function loadOperatorConfig(){
+  try {
+    const r = await fetch("./operator-templates.json", { cache:"no-store" });
+    if (r.ok){
+      OPERATOR_CONFIG = await r.json();
+      localStorage.setItem(OPERATOR_CONFIG_CACHE_KEY, JSON.stringify(OPERATOR_CONFIG));
+      if (typeof render === "function") render();
+      if (typeof updateTopbar === "function") updateTopbar();
+    }
+  } catch(e){ /* offline, or first deploy before the file exists — keep whatever's cached */ }
+}
+async function publishOperatorConfig(){
+  const token = (STATE.githubToken||"").trim();
+  if (!token){ toast("Add a GitHub token in Settings first"); return false; }
+  const repo = "alistairmckimm/mckimm-pivot";
+  const path = "operator-templates.json";
+  try {
+    let sha = null;
+    const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+      headers: { Authorization:`Bearer ${token}`, Accept:"application/vnd.github+json" }
+    });
+    if (getRes.ok){ sha = (await getRes.json()).sha; }
+    else if (getRes.status !== 404){ toast("Publish failed: couldn't check current file ("+getRes.status+")"); return false; }
+    const json = JSON.stringify(OPERATOR_CONFIG, null, 2);
+    const content = btoa(unescape(encodeURIComponent(json)));
+    const body = { message:"Update operator template/project access", content };
+    if (sha) body.sha = sha;
+    const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+      method:"PUT",
+      headers: { Authorization:`Bearer ${token}`, Accept:"application/vnd.github+json", "Content-Type":"application/json" },
+      body: JSON.stringify(body)
+    });
+    if (putRes.ok){
+      OPERATOR_CONFIG_DIRTY = false;
+      toast("Published \u2014 operators will see this next time they open the app");
+      return true;
+    }
+    const err = await putRes.json().catch(()=>({}));
+    toast("Publish failed: " + (err.message || putRes.status));
+    return false;
+  } catch(e){
+    toast("Publish failed: " + e.message);
+    return false;
+  }
+}
 
 /* ---------- Routing ---------- */
 let route = { view:"dashboard", params:{} };
@@ -3823,20 +3888,93 @@ function renderPhotos(){
 /* ============================================================
    VIEW: Users
    ============================================================ */
+function accessSummary(u){
+  const c = OPERATOR_CONFIG[u];
+  if (!c) return `<span class="status ok">Full access</span>`;
+  if (c.fullAccess) return `<span class="status ok">Full access</span>`;
+  const nt = (c.templates||[]).length, np = (c.projects||[]).length;
+  if (nt===0 && np===0) return `<span class="status bad">No access set</span>`;
+  return `<span class="status wait">${nt} template${nt===1?"":"s"} \u00b7 ${np} project${np===1?"":"s"}</span>`;
+}
 function renderUsers(){
   return `
     <div class="crumbs"><span>McKimm Civil Pty Ltd</span><span class="sep">›</span><span>Users</span></div>
     <h1 class="page-title">Users</h1>
+    <div class="notice notice-info" style="margin-bottom:14px">Tick which projects and templates each operator sees on their phone under <b>Edit access</b>, then hit <b>Publish changes to team</b> once \u2014 that pushes it live to every device, no per-phone setup needed. Anyone left on \"Full access\" sees every project/template plus the Admin/Supervisor menu, same as today.</div>
+    <div class="toolbar">
+      <div class="grow"></div>
+      ${OPERATOR_CONFIG_DIRTY ? `<span class="status wait" style="margin-right:8px">Unpublished changes</span>` : ``}
+      <button class="btn primary" onclick="publishOperatorConfig().then(()=>render())">Publish changes to team</button>
+    </div>
     <div class="list"><table>
-      <thead><tr><th>Name</th><th>Role</th><th>Forms Created</th></tr></thead>
+      <thead><tr><th>Name</th><th>Role</th><th>Forms Created</th><th>Access</th><th></th></tr></thead>
       <tbody>
         ${USERS.map(u=>`<tr>
           <td><strong>${esc(u)}</strong></td>
           <td><span class="status">Employee</span></td>
           <td>${STATE.forms.filter(f=>f.createdBy===u).length}</td>
+          <td>${accessSummary(u)}</td>
+          <td><button class="btn sm" onclick="openOperatorAccessEditor('${esc(u).replace(/'/g,"\\'")}')">Edit access</button></td>
         </tr>`).join("")}
       </tbody></table></div>
   `;
+}
+
+/* ---------- Operator access editor (modal) ---------- */
+function openOperatorAccessEditor(userName){
+  const existing = OPERATOR_CONFIG[userName];
+  const restricted = !!existing;
+  const projects = existing ? (existing.projects||[]) : PROJECT_LOCATIONS.slice();
+  const templates = existing ? (existing.templates||[]) : TEMPLATES.map(t=>t.id);
+  const fullAccess = existing ? !!existing.fullAccess : true;
+  const cats = [...new Set(TEMPLATES.map(t=>t.category))];
+
+  const body = `
+    <div class="field">
+      <label><input type="checkbox" id="opFullAccess" ${fullAccess?"checked":""} onchange="document.getElementById('opRestrictedBlock').style.display=this.checked?'none':''"> Full admin/supervisor access (sees every project, every template, and the \u2630 Admin/Supervisor menu in McKimm Field)</label>
+      <div class="hint">Untick this to hand them a curated, restricted phone \u2014 only the projects/templates you tick below, no Admin/Supervisor menu.</div>
+    </div>
+    <div id="opRestrictedBlock" style="display:${fullAccess?"none":""}">
+      <h2 class="section-title">Projects they can select on-site</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;margin-bottom:16px">
+        ${PROJECT_LOCATIONS.map(p=>`<label style="font-size:13px;display:flex;gap:6px;align-items:flex-start"><input type="checkbox" class="op-proj" value="${esc(p)}" ${projects.includes(p)?"checked":""}> ${esc(p)}</label>`).join("")}
+      </div>
+      <h2 class="section-title">Templates they can fill out</h2>
+      ${cats.map(c=>`
+        <div style="margin-bottom:10px">
+          <div style="font-weight:600;font-size:12.5px;color:var(--muted);margin-bottom:4px">${esc(c)}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 14px">
+            ${TEMPLATES.filter(t=>t.category===c).map(t=>`<label style="font-size:13px;display:flex;gap:6px;align-items:flex-start"><input type="checkbox" class="op-tpl" value="${t.id}" ${templates.includes(t.id)?"checked":""}> ${esc(t.name)}</label>`).join("")}
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+  const footer = `
+    ${restricted ? `<button class="btn" onclick="resetOperatorAccess('${esc(userName).replace(/'/g,"\\'")}')">Remove restrictions</button>` : ``}
+    <button class="btn ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn primary" onclick="saveOperatorAccess('${esc(userName).replace(/'/g,"\\'")}')">Save</button>
+  `;
+  showModal("Access \u2014 " + userName, body, footer);
+}
+function saveOperatorAccess(userName){
+  const fullAccess = document.getElementById("opFullAccess").checked;
+  const projects = [...document.querySelectorAll(".op-proj:checked")].map(el=>el.value);
+  const templates = [...document.querySelectorAll(".op-tpl:checked")].map(el=>el.value);
+  OPERATOR_CONFIG[userName] = { projects, templates, fullAccess };
+  OPERATOR_CONFIG_DIRTY = true;
+  localStorage.setItem(OPERATOR_CONFIG_CACHE_KEY, JSON.stringify(OPERATOR_CONFIG));
+  closeModal();
+  toast("Saved \u2014 click \"Publish changes to team\" to push this live");
+  render();
+}
+function resetOperatorAccess(userName){
+  delete OPERATOR_CONFIG[userName];
+  OPERATOR_CONFIG_DIRTY = true;
+  localStorage.setItem(OPERATOR_CONFIG_CACHE_KEY, JSON.stringify(OPERATOR_CONFIG));
+  closeModal();
+  toast("Reset to full access \u2014 click \"Publish changes to team\" to push this live");
+  render();
 }
 
 /* ============================================================
@@ -3857,6 +3995,12 @@ function renderSettings(){
         <label>Default folder</label>
         <input type="text" value="${esc(STATE.activeFolder)}" oninput="STATE.activeFolder=this.value;save()" />
         <div class="hint">Used as the folder path on new forms.</div>
+      </div>
+      <h2 class="section-title">Publishing (Users \u2192 access)</h2>
+      <div class="field">
+        <label>GitHub token</label>
+        <input type="password" value="${esc(STATE.githubToken)}" oninput="STATE.githubToken=this.value;save()" placeholder="ghp_... or github_pat_..." />
+        <div class="hint">Needed once, to publish Users \u2192 access changes so they reach every operator's phone. Create a <b>fine-grained</b> token at github.com \u2192 Settings \u2192 Developer settings \u2192 Fine-grained tokens, scoped to <b>only</b> the <code>mckimm-pivot</code> repository, with <b>Contents: Read and write</b> permission and nothing else. Stored only in this browser \u2014 never uploaded anywhere except directly to GitHub's API when you click Publish.</div>
       </div>
       <h2 class="section-title">Data</h2>
       <p style="color:var(--muted)">All data lives in this browser. Use Backup to save a snapshot to OneDrive; use Restore to load it.</p>
@@ -4461,3 +4605,8 @@ function renderCatTree(){
     `).join("")}</div>
   `).join("");
 }
+
+/* Kick off the operator-access fetch as soon as the engine loads (fire and
+   forget \u2014 loadOperatorConfig() re-renders once it lands, so whichever
+   view is already showing just updates in place). */
+loadOperatorConfig();

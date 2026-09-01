@@ -1,6 +1,6 @@
 /* McKimm Pivot — Service Worker
    Offline-first caching for the single-file app. */
-const CACHE = "mckimm-pivot-v3";
+const CACHE = "mckimm-pivot-v4";
 const APP_SHELL = [
   "./",
   "./McKimm-Pivot.html",
@@ -37,7 +37,7 @@ self.addEventListener("fetch", e => {
   // Network-first for HTML so updates flow through
   // Network-first for HTML and the app's own JS (it changes during active development);
   // cache-first stays for CDN libs, icons, manifest.
-  if (req.destination === "document" || req.url.endsWith(".html") || req.url.endsWith(".js") && req.url.startsWith(self.location.origin)) {
+  if (req.destination === "document" || req.url.endsWith(".html") || (req.url.endsWith(".js") || req.url.endsWith(".json")) && req.url.startsWith(self.location.origin)) {
     e.respondWith(
       fetch(req).then(res => {
         const copy = res.clone();
