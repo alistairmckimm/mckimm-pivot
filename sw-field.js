@@ -1,6 +1,6 @@
 /* McKimm Field — Service Worker
    Offline-first caching for the single-file app. */
-const CACHE = "mckimm-field-v3";
+const CACHE = "mckimm-field-v4";
 const APP_SHELL = [
   "./",
   "./McKimm-Field.html",
@@ -39,7 +39,10 @@ self.addEventListener("fetch", e => {
   // cache-first stays for CDN libs, icons, manifest.
   if (req.destination === "document" || req.url.endsWith(".html") || (req.url.endsWith(".js") || req.url.endsWith(".json")) && req.url.startsWith(self.location.origin)) {
     e.respondWith(
-      fetch(req).then(res => {
+      // no-store: bypass the browser's own HTTP cache too, not just this
+      // service worker's Cache Storage \u2014 otherwise a "network-first"
+      // fetch can still resolve from a stale disk-cached response.
+      fetch(req, { cache: "no-store" }).then(res => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(req, copy));
         return res;
