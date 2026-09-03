@@ -536,13 +536,18 @@ const TEMPLATES = [
     ]
   },
 
-  /* ---- Environmental Monitoring — MCK-Enviro-Monitor v11 — 6 forms ---- */
+  /* ---- Environmental Monitoring — MCK-Enviro-Monitor v12 — 6 forms ----
+     v12: added photos/comments to Flora Fauna & Heritage and Chemicals
+     sections, and a photos field to Waste Management, so environmental
+     audit photo-recognition findings (erosion/sediment already had a
+     home in esc_*, water in water_*) have somewhere to land for every
+     category Al asked to detect. See Compliance page photo analyser. */
   {
     id:"MCK-Enviro-Monitor",
     name:"Environmental Monitoring",
     category:"Environment (ISO 14001)",
     code:"MCK-Enviro-Monitor",
-    version:"v11",
+    version:"v12",
     icon:"🌱",
     workflow:{ type:"linear", columns:["Logged"], default:"Logged" },
     instructions:"Record on-site environmental monitoring observations. Required by ISO 14001 §9.1.1 (Monitoring, measurement, analysis and evaluation of environmental performance). Frequency per the project Environmental Management Plan (EMP).",
@@ -578,17 +583,22 @@ const TEMPLATES = [
       {id:"waste", title:"Waste Management", fields:[
         {id:"bins_segregated", label:"Bins correctly segregated?", type:"chips", options:["Yes","No"]},
         {id:"venm_managed", label:"VENM handled per procedure?", type:"chips", options:["Yes","No","N/A"]},
+        {id:"waste_photos", label:"Waste / Contamination Photos", type:"photos"},
         {id:"waste_comments", label:"Comments", type:"textarea"}
       ]},
       {id:"chemicals", title:"Chemicals & Hazardous Materials", fields:[
         {id:"chems_stored", label:"Chemicals stored in bunded area?", type:"chips", options:["Yes","No","N/A"]},
         {id:"sds_available", label:"Current SDS on site?", type:"chips", options:["Yes","No","N/A"]},
-        {id:"spill_kit", label:"Spill kit present and stocked?", type:"chips", options:["Yes","No","N/A"]}
+        {id:"spill_kit", label:"Spill kit present and stocked?", type:"chips", options:["Yes","No","N/A"]},
+        {id:"chems_photos", label:"Spill Kit / Bunding Photos", type:"photos"},
+        {id:"chems_comments", label:"Comments", type:"textarea"}
       ]},
       {id:"flora_fauna", title:"Flora, Fauna & Heritage", fields:[
         {id:"clearing_limits", label:"Clearing within approved limits?", type:"chips", options:["Yes","No","N/A"]},
         {id:"biosecurity", label:"Biosecurity (wash-down) compliance?", type:"chips", options:["Yes","No","N/A"]},
-        {id:"heritage_observed", label:"Heritage items observed/disturbed?", type:"chips", options:["No","Yes – stop work"]}
+        {id:"heritage_observed", label:"Heritage items observed/disturbed?", type:"chips", options:["No","Yes – stop work"]},
+        {id:"flora_photos", label:"Vegetation / Clearing Photos", type:"photos"},
+        {id:"flora_comments", label:"Comments", type:"textarea"}
       ]},
       {id:"summary", title:"Overall Status & Actions", fields:[
         {id:"overall_status", label:"Overall Environmental Status", type:"chips", options:["Compliant","Minor non-compliance (action logged)","Significant non-compliance (NCR raised)"]},
@@ -2807,7 +2817,7 @@ const TEMPLATES = [
     name:"Water Quality Monitoring",
     category:"Enviro - Water",
     code:"MCK-Enviro-Water",
-    version:"v2",
+    version:"v3",
     icon:"💧",
     workflow:{ type:"linear", columns:["Recorded"], default:"Recorded" },
     instructions:"Baseline Testing on water bodies must occur prior to any Works commencement. Water Monitoring should occur weekly or immediately after a precipitation event. Post Works reporting is recommended 2 months after work completion at monthly intervals.",
@@ -2818,7 +2828,9 @@ const TEMPLATES = [
         {id:"wq_legal", label:"", type:"notice", variant:"warning", html:"<p><strong>Legal</strong> — it is a legal requirement under the Environmental Protection Act 2011 to report any results that are dangerous to the environment.</p>"},
         {id:"wq_location", label:"Location", type:"select", options:PROJECT_LOCATIONS.concat(["Add new location..."]), required:true},
         {id:"wq_new_location", label:"New Location", type:"text", showIf:{field:"wq_location", includes:"Add new location..."}},
-        {id:"wq_results", label:"Test Results", type:"table", columns:["Test Conducted by","Site","Date","Time"]}
+        {id:"wq_photos", label:"Waterway / Drainage Photos", type:"photos"},
+        {id:"wq_results", label:"Test Results", type:"table", columns:["Test Conducted by","Site","Date","Time"]},
+        {id:"wq_findings", label:"Findings / Observations", type:"textarea"}
       ]}
     ]
   },
@@ -3165,9 +3177,11 @@ function load(){
     s.currentUser = s.currentUser || "Alistair McKimm";
     s.myDayEquipment = s.myDayEquipment || "";
     s.githubToken = s.githubToken || "";
+    s.auditWorkerUrl = s.auditWorkerUrl || "";
+    s.auditWorkerToken = s.auditWorkerToken || "";
     return s;
   } catch(e){
-    return { forms:[], activeFolder:"Administration", currentUser:"Alistair McKimm", myDayEquipment:"", githubToken:"" };
+    return { forms:[], activeFolder:"Administration", currentUser:"Alistair McKimm", myDayEquipment:"", githubToken:"", auditWorkerUrl:"", auditWorkerToken:"" };
   }
 }
 function save(){ localStorage.setItem(LS_KEY, JSON.stringify(STATE)); }
@@ -3881,10 +3895,314 @@ function renderCompliance(){
         </select>
       </div>
       <div class="grow"></div>
+      <button class="btn" onclick="openAuditPhotoAnalyzer(selectedProject)">📷 Analyse audit photos (AI)</button>
       <button class="btn" onclick='openProjectComplianceEditor(${JSON.stringify(selectedProject)})'>Edit checklist for this project</button>
     </div>
     <div class="grid">${project.map(complianceCard).join("")}</div>
   `;
+}
+
+/* ============================================================
+   Audit photo recognition (Environmental / Safety / Quality)
+   ------------------------------------------------------------
+   NOT LIVE for the team - experimental, Al-only, gated behind
+   STATE.auditWorkerUrl/auditWorkerToken which are only set on
+   Al's own device via Settings. Sends a batch of audit photos to
+   a Cloudflare Worker (see audit-photo-worker.js in this same
+   folder) that holds the real Anthropic API key server-side and
+   returns structured findings, which the reviewer step below
+   lets Al edit/deselect before anything is written into a form.
+   Do not publish/deploy this to GitHub Pages until Al says go.
+
+   Three audit types, three different "shapes" of destination:
+   - environmental (mode:"sections") - findings distributed into
+     existing per-topic photo/comment field pairs on
+     MCK-Enviro-Monitor, with waterway findings optionally also
+     offered to MCK-Enviro-Water (its own photos+findings field).
+   - safety (mode:"table") - findings become rows in
+     MCK-Safety-Inspection's existing Findings & Actions table
+     (finding_photos + findings_table), no schema change needed.
+   - quality (mode:"single") - all findings from one audit batch
+     combine into a single MCK-NCR (Non-Conformance Report), same
+     one-form-per-audit shape as the other two. (Originally built
+     as one NCR per finding, since an NCR is technically a
+     one-issue-per-form ISO record - simplified to a single
+     combined NCR on 2026-09-02 at Al's request while he's still
+     calibrating what the AI should flag on real photos; easy to
+     revert if one-per-finding turns out to matter more later.)
+     Only evidence photos, description, category and project are
+     pre-filled; severity/root cause/disposition are deliberately
+     left for Al, same "confirm-first, no compliance judgement
+     calls" principle used for the other two types.
+   ============================================================ */
+const AUDIT_TYPES = {
+  environmental: {
+    label:"Environmental",
+    modalTitle:"Environmental Audit — Photo Recognition",
+    mode:"sections",
+    targetTemplate:"MCK-Enviro-Monitor",
+    defaultCategory:"contamination",
+    categories: {
+      erosion:       { label:"Erosion & Sediment Control",   photoField:"esc_photos",   commentField:"esc_comments" },
+      waterway:      { label:"Waterway / Drainage",           photoField:"water_photos", commentField:"water_comments" },
+      vegetation:    { label:"Vegetation / Clearing Limits",  photoField:"flora_photos", commentField:"flora_comments" },
+      contamination: { label:"Contamination / Waste",         photoField:"waste_photos", commentField:"waste_comments" },
+      spillkit:      { label:"Spill Kit / Bunding",           photoField:"chems_photos", commentField:"chems_comments" }
+    },
+    prefillBase:(project)=>({ project, monitor_date:new Date().toISOString().slice(0,10), monitored_by:STATE.currentUser }),
+    secondary:{
+      category:"waterway",
+      template:"MCK-Enviro-Water",
+      confirmMsg:"Also create a Water Quality Monitoring entry for the waterway/drainage findings from this audit?",
+      prefillBase:(project)=>({ wq_location:project, wq_photos:[] }),
+      photoField:"wq_photos",
+      textField:"wq_findings"
+    }
+  },
+  safety: {
+    label:"Safety",
+    modalTitle:"Safety Audit — Photo Recognition",
+    mode:"table",
+    targetTemplate:"MCK-Safety-Inspection",
+    defaultCategory:"housekeeping",
+    categories: {
+      housekeeping: { label:"Housekeeping / Access / Signage" },
+      ppe:          { label:"PPE" },
+      plant:        { label:"Plant & Equipment" },
+      highrisk:     { label:"High-Risk Work" }
+    },
+    photoField:"finding_photos",
+    tableField:"findings_table",
+    prefillBase:(project)=>({ project, inspect_date:new Date().toISOString().slice(0,10), inspector:STATE.currentUser })
+  },
+  quality: {
+    // Simplified 2026-09-02 at Al's request, while he's still vetting/
+    // calibrating what the AI should flag on the first real batches of
+    // photos: ONE combined NCR per audit (like Environmental/Safety),
+    // not one NCR per finding. Previously each finding created its own
+    // Non-Conformance Report, which is the technically "correct" ISO
+    // shape (an NCR is meant to be one issue per form) but felt too
+    // heavy for a routine quality walk, especially early on while the
+    // categories are still being tuned. Easy to switch back to
+    // one-NCR-per-finding later if that turns out to matter more once
+    // real usage settles — see the git history / .bak file for the
+    // previous version if so.
+    label:"Quality",
+    modalTitle:"Quality Audit — Photo Recognition",
+    mode:"single",
+    targetTemplate:"MCK-NCR",
+    defaultCategory:"quality",
+    categories: {
+      quality: { label:"Non-Conformance" }
+    },
+    photoField:"evidence_photos",
+    textField:"description",
+    prefillBase:(project)=>({
+      project,
+      raised_date:new Date().toISOString().slice(0,10),
+      raised_by:STATE.currentUser,
+      category:["Quality (ISO 9001)"]
+    })
+  }
+};
+let AUDIT_AI = { type:"environmental", project:"", photos:[], busy:false, results:null, error:"" };
+
+function openAuditPhotoAnalyzer(project, type){
+  AUDIT_AI = { type: type || AUDIT_AI.type || "environmental", project: project || STATE.complianceProject || PROJECT_LOCATIONS[0], photos:[], busy:false, results:null, error:"" };
+  renderAuditPhotoModal();
+}
+function renderAuditPhotoModal(){
+  const projectOptions = PROJECT_LOCATIONS.filter(p=>p!=="Other (see comments)");
+  const cfg = AUDIT_TYPES[AUDIT_AI.type];
+  if (!STATE.auditWorkerUrl || !STATE.auditWorkerToken){
+    showModal("Audit Photo Recognition",
+      `<p class="hint">Not set up yet. Add the Worker URL and app token in <b>Settings → Audit Photo Recognition</b> first — see the setup guide for how to get those.</p>`,
+      `<button class="btn ghost" onclick="closeModal()">Close</button>`);
+    return;
+  }
+  if (AUDIT_AI.results) return renderAuditResultsModal();
+  const thumbs = AUDIT_AI.photos.map((p,i)=>`
+    <div class="photo">
+      <img src="${p}" />
+      <button class="x" onclick="auditRemovePhoto(${i})">✕</button>
+    </div>`).join("");
+  const body = `
+    <div class="field">
+      <label>Audit type</label>
+      <select onchange="AUDIT_AI.type=this.value;renderAuditPhotoModal()">
+        ${Object.entries(AUDIT_TYPES).map(([k,v])=>`<option value="${k}" ${k===AUDIT_AI.type?"selected":""}>${esc(v.label)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field">
+      <label>Project</label>
+      <select onchange="AUDIT_AI.project=this.value">
+        ${projectOptions.map(p=>`<option ${p===AUDIT_AI.project?"selected":""}>${esc(p)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field">
+      <label>Audit photos (${AUDIT_AI.photos.length})</label>
+      <div class="photo-strip">
+        ${thumbs}
+        <label class="add-photo">+
+          <input type="file" accept="image/*" capture="environment" multiple onchange="auditPhotosPicked(this.files)" />
+        </label>
+      </div>
+      <div class="hint">Take or select this audit's photo batch. They're sent only to your own Cloudflare Worker for analysis.</div>
+    </div>
+    ${AUDIT_AI.error ? `<p style="color:var(--bad)">${esc(AUDIT_AI.error)}</p>` : ""}
+    ${AUDIT_AI.busy ? `<p class="hint">Analysing ${AUDIT_AI.photos.length} photo(s)… this can take up to a minute for a full batch.</p>` : ""}
+  `;
+  const footer = `
+    <button class="btn ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn primary" ${(AUDIT_AI.busy||!AUDIT_AI.photos.length)?"disabled":""} onclick="runAuditAnalysis()">${AUDIT_AI.busy?"Analysing…":"Analyse photos"}</button>
+  `;
+  showModal(cfg.modalTitle, body, footer);
+}
+function auditPhotosPicked(files){
+  const tasks = Array.from(files).map(file=> new Promise(res=>{
+    if (!file.type.startsWith("image/")) return res(null);
+    const r = new FileReader();
+    r.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const max = 1280;
+        let w=img.width, h=img.height;
+        if (w>max||h>max){ const s = max/Math.max(w,h); w=w*s; h=h*s; }
+        const c = document.createElement("canvas"); c.width=w; c.height=h;
+        c.getContext("2d").drawImage(img,0,0,w,h);
+        stampPhotoCanvas(c);
+        res(c.toDataURL("image/jpeg",0.85));
+      };
+      img.src = r.result;
+    };
+    r.readAsDataURL(file);
+  }));
+  Promise.all(tasks).then(results=>{
+    results.filter(Boolean).forEach(d=>AUDIT_AI.photos.push(d));
+    renderAuditPhotoModal();
+  });
+}
+function auditRemovePhoto(i){ AUDIT_AI.photos.splice(i,1); renderAuditPhotoModal(); }
+async function runAuditAnalysis(){
+  AUDIT_AI.busy = true; AUDIT_AI.error = ""; renderAuditPhotoModal();
+  try {
+    const res = await fetch(STATE.auditWorkerUrl, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+STATE.auditWorkerToken },
+      body: JSON.stringify({ auditType: AUDIT_AI.type, photos: AUDIT_AI.photos })
+    });
+    if (!res.ok){
+      const t = await res.text().catch(()=>"");
+      throw new Error("Worker returned "+res.status+(t?": "+t.slice(0,200):""));
+    }
+    const data = await res.json();
+    AUDIT_AI.results = (data.findings||[]).map(f=>({...f, include:true}));
+    AUDIT_AI.busy = false;
+    renderAuditPhotoModal();
+  } catch(e){
+    AUDIT_AI.busy = false;
+    AUDIT_AI.error = "Analysis failed: " + e.message;
+    renderAuditPhotoModal();
+  }
+}
+function renderAuditResultsModal(){
+  const cfg = AUDIT_TYPES[AUDIT_AI.type];
+  const results = AUDIT_AI.results;
+  if (!results.length){
+    showModal(cfg.modalTitle,
+      `<p class="hint">No ${esc(cfg.label.toLowerCase())} findings recognised in this batch — nothing to add. You can still open the relevant form manually if needed.</p>`,
+      `<button class="btn ghost" onclick="closeModal()">Close</button>`);
+    return;
+  }
+  const rows = results.map((f,i)=>`
+    <div class="card" style="margin-bottom:10px">
+      <div class="row" style="align-items:flex-start;gap:10px">
+        <input type="checkbox" ${f.include?"checked":""} onchange="AUDIT_AI.results[${i}].include=this.checked" style="margin-top:6px" />
+        ${typeof f.photoIndex==="number" && AUDIT_AI.photos[f.photoIndex] ? `<img src="${AUDIT_AI.photos[f.photoIndex]}" style="width:64px;height:64px;object-fit:cover;border-radius:6px" />` : ""}
+        <div style="flex:1">
+          <select onchange="AUDIT_AI.results[${i}].category=this.value" style="margin-bottom:6px">
+            ${Object.entries(cfg.categories).map(([k,v])=>`<option value="${k}" ${f.category===k?"selected":""}>${esc(v.label)}</option>`).join("")}
+          </select>
+          ${cfg.mode==="table" ? `<select onchange="AUDIT_AI.results[${i}].risk=this.value" style="margin-bottom:6px;margin-left:6px">
+            ${["Low","Medium","High"].map(r=>`<option ${f.risk===r?"selected":""}>${r}</option>`).join("")}
+          </select>` : ""}
+          <textarea rows="2" style="width:100%" oninput="AUDIT_AI.results[${i}].comment=this.value">${esc(f.comment||"")}</textarea>
+        </div>
+      </div>
+    </div>`).join("");
+  const body = `
+    <p class="hint" style="margin-bottom:10px">Review before anything's written to a form — untick anything wrong, fix the category, edit the wording. Nothing is saved until you click Apply.</p>
+    ${rows}
+  `;
+  const footer = `
+    <button class="btn ghost" onclick="AUDIT_AI.results=null;renderAuditPhotoModal()">Back</button>
+    <button class="btn primary" onclick="applyAuditFindings()">Apply to forms</button>
+  `;
+  showModal("Review findings (" + results.length + ")", body, footer);
+}
+function applyAuditFindings(){
+  const cfg = AUDIT_TYPES[AUDIT_AI.type];
+  const included = AUDIT_AI.results.filter(f=>f.include);
+  if (!included.length){ toast("Nothing ticked to apply"); return; }
+
+  if (cfg.mode === "sections"){
+    const prefill = cfg.prefillBase(AUDIT_AI.project);
+    const secCfg = cfg.secondary;
+    const secondaryPrefill = secCfg ? secCfg.prefillBase(AUDIT_AI.project) : null;
+    const secondaryText = [];
+    included.forEach(f=>{
+      const map = cfg.categories[f.category] || cfg.categories[cfg.defaultCategory];
+      const photo = (typeof f.photoIndex==="number") ? AUDIT_AI.photos[f.photoIndex] : null;
+      if (photo) prefill[map.photoField] = (prefill[map.photoField]||[]).concat([photo]);
+      prefill[map.commentField] = [prefill[map.commentField], f.comment].filter(Boolean).join("\n");
+      if (secCfg && f.category === secCfg.category){
+        if (photo) secondaryPrefill[secCfg.photoField].push(photo);
+        secondaryText.push(f.comment);
+      }
+    });
+    let alsoSecondary = false;
+    if (secCfg && secondaryText.length){
+      alsoSecondary = confirm(secCfg.confirmMsg);
+    }
+    const mainForm = createForm(cfg.targetTemplate, prefill);
+    let secForm = null;
+    if (alsoSecondary){
+      secondaryPrefill[secCfg.textField] = secondaryText.join("\n");
+      secForm = createForm(secCfg.template, secondaryPrefill);
+    }
+    closeModal();
+    toast("Findings applied — review and save the form(s)");
+    const landOn = secForm || mainForm;
+    if (landOn) nav("form", {id:landOn.templateId, formId:landOn.id});
+
+  } else if (cfg.mode === "table"){
+    const prefill = cfg.prefillBase(AUDIT_AI.project);
+    const rows2 = [];
+    included.forEach(f=>{
+      const photo = (typeof f.photoIndex==="number") ? AUDIT_AI.photos[f.photoIndex] : null;
+      if (photo) prefill[cfg.photoField] = (prefill[cfg.photoField]||[]).concat([photo]);
+      rows2.push([f.comment||"", f.risk||"Medium", "", "", "", "Open"]);
+    });
+    prefill[cfg.tableField] = rows2;
+    const form = createForm(cfg.targetTemplate, prefill);
+    closeModal();
+    toast("Findings applied — review and save the form");
+    if (form) nav("form", {id:form.templateId, formId:form.id});
+
+  } else if (cfg.mode === "single"){
+    const prefill = cfg.prefillBase(AUDIT_AI.project);
+    const texts = [];
+    included.forEach(f=>{
+      const photo = (typeof f.photoIndex==="number") ? AUDIT_AI.photos[f.photoIndex] : null;
+      if (photo) prefill[cfg.photoField] = (prefill[cfg.photoField]||[]).concat([photo]);
+      if (f.comment) texts.push(f.comment);
+    });
+    prefill[cfg.textField] = texts.join("\n");
+    const form = createForm(cfg.targetTemplate, prefill);
+    closeModal();
+    toast("Findings applied — review and save the form");
+    if (form) nav("form", {id:form.templateId, formId:form.id});
+  }
 }
 
 /* ============================================================
@@ -4231,6 +4549,17 @@ function renderSettings(){
         <input type="password" value="${esc(STATE.githubToken)}" oninput="STATE.githubToken=this.value;save()" placeholder="ghp_... or github_pat_..." />
         <div class="hint">Needed once, to publish Users \u2192 access changes so they reach every operator's phone. Create a <b>fine-grained</b> token at github.com \u2192 Settings \u2192 Developer settings \u2192 Fine-grained tokens, scoped to <b>only</b> the <code>mckimm-pivot</code> repository, with <b>Contents: Read and write</b> permission and nothing else. Stored only in this browser \u2014 never uploaded anywhere except directly to GitHub's API when you click Publish.</div>
       </div>
+      <h2 class="section-title">Audit Photo Recognition (AI)</h2>
+      <div class="field">
+        <label>Photo-analysis proxy URL</label>
+        <input type="text" value="${esc(STATE.auditWorkerUrl)}" oninput="STATE.auditWorkerUrl=this.value;save()" placeholder="https://mckimm-audit-ai.<your-subdomain>.workers.dev" />
+        <div class="hint">The Cloudflare Worker URL from your account setup. Covers all three audit types (Environmental, Safety, Quality) — the app sends audit photos here, and the Worker holds the real Anthropic API key and never exposes it to this browser.</div>
+      </div>
+      <div class="field">
+        <label>App token</label>
+        <input type="password" value="${esc(STATE.auditWorkerToken)}" oninput="STATE.auditWorkerToken=this.value;save()" placeholder="a long random string you also set as a Worker secret" />
+        <div class="hint">A shared secret only you know, so nobody who finds the Worker URL can use it to run up your Anthropic bill. Not the Anthropic API key itself — that lives only in the Worker.</div>
+      </div>
       <h2 class="section-title">Data</h2>
       <p style="color:var(--muted)">All data lives in this browser. Use Backup to save a snapshot to OneDrive; use Restore to load it.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -4250,9 +4579,9 @@ function renderSettings(){
    ============================================================ */
 let CURRENT_FORM = null;
 
-function startForm(templateId, prefill={}){
+function createForm(templateId, prefill={}){
   const t = templateById(templateId);
-  if (!t) return;
+  if (!t) return null;
   const f = {
     id: uid(),
     templateId,
@@ -4266,7 +4595,11 @@ function startForm(templateId, prefill={}){
     activity: [{who:STATE.currentUser, when:Date.now(), what:"Created v1"}]
   };
   STATE.forms.push(f); save();
-  nav("form", {id:templateId, formId:f.id});
+  return f;
+}
+function startForm(templateId, prefill={}){
+  const f = createForm(templateId, prefill);
+  if (f) nav("form", {id:templateId, formId:f.id});
 }
 
 function renderForm(m){
