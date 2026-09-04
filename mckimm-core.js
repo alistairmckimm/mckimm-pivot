@@ -3159,6 +3159,7 @@ const TEMPLATES = [
 ];
 
 /* ---------- State / storage ---------- */
+const MCKIMM_APP = window.MCKIMM_APP || "pivot"; // "field" or "pivot" — set by the HTML shell before this script loads; drives the sync behaviour below
 const LS_KEY = "mckimm-pivot-v1";
 const LS_KEY_OLD = "mckimm-sitemate-v1"; // pre-rename key — migrated on first load so nothing looks lost
 let STATE = load();
@@ -3179,13 +3180,124 @@ function load(){
     s.githubToken = s.githubToken || "";
     s.auditWorkerUrl = s.auditWorkerUrl || "";
     s.auditWorkerToken = s.auditWorkerToken || "";
+    s.lastSyncPull = s.lastSyncPull || 0;
     return s;
   } catch(e){
-    return { forms:[], activeFolder:"Administration", currentUser:"Alistair McKimm", myDayEquipment:"", githubToken:"", auditWorkerUrl:"", auditWorkerToken:"" };
+    return { forms:[], activeFolder:"Administration", currentUser:"Alistair McKimm", myDayEquipment:"", githubToken:"", auditWorkerUrl:"", auditWorkerToken:"", lastSyncPull:0 };
   }
 }
-function save(){ localStorage.setItem(LS_KEY, JSON.stringify(STATE)); }
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(STATE)); scheduleSyncDebounced(); }
 function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+/* ---------- Form sync (McKimm Field <-> McKimm Pivot) ----------
+   Reuses the same Cloudflare Worker + shared token already configured
+   under Settings -> Audit Photo Recognition (no new fields needed). The
+   Worker exposes two extra routes alongside the existing photo-analysis
+   one:
+     POST /sync/submit  { form }                      -> {ok:true} or {ok:true, skipped:true, form:<newer copy>}
+     GET  /sync/list?scope=all&since=<ms>              -> {forms:[...]}   (McKimm Pivot: everything, always)
+     GET  /sync/list?scope=mine&user=<name>&hours=24   -> {forms:[...]}   (McKimm Field: just this operator's last 24h)
+
+   Every sync is best-effort: save() debounces a submit attempt for
+   whatever changed, and a failure (offline, Worker unreachable) just
+   flags the form `_syncPending` so it's retried later — nothing is ever
+   lost locally because a sync attempt failed. */
+let SYNC_DEBOUNCE_TIMER = null;
+let SYNC_IN_FLIGHT = false;
+
+function syncUrl(path){
+  const base = (STATE.auditWorkerUrl||"").trim().replace(/\/+$/,"");
+  return base ? base + path : "";
+}
+function syncReady(){
+  return !!(syncUrl("/") && (STATE.auditWorkerToken||"").trim());
+}
+function scheduleSyncDebounced(){
+  if (!syncReady()) return;
+  clearTimeout(SYNC_DEBOUNCE_TIMER);
+  SYNC_DEBOUNCE_TIMER = setTimeout(flushPendingSyncs, 5000);
+}
+async function attemptSyncForm(form){
+  if (!syncReady()){ form._syncPending = true; return false; }
+  try {
+    const res = await fetch(syncUrl("/sync/submit"), {
+      method: "POST",
+      headers: { "Content-Type":"application/json", "Authorization":"Bearer "+STATE.auditWorkerToken.trim() },
+      body: JSON.stringify({ form })
+    });
+    if (!res.ok) throw new Error("HTTP "+res.status);
+    const data = await res.json();
+    if (data && data.skipped && data.form){
+      // Our copy was stale (someone else's edit already won) — adopt the
+      // server's newer copy instead of re-sending ours.
+      Object.assign(form, data.form);
+    }
+    delete form._syncPending;
+    return true;
+  } catch(e){
+    form._syncPending = true;
+    return false;
+  }
+}
+async function flushPendingSyncs(){
+  if (SYNC_IN_FLIGHT || !syncReady()) return;
+  const pending = STATE.forms.filter(f=>f._syncPending);
+  if (!pending.length) return;
+  SYNC_IN_FLIGHT = true;
+  try {
+    let changed = false;
+    for (const f of pending){
+      const ok = await attemptSyncForm(f);
+      if (ok) changed = true;
+    }
+    if (changed) localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+  } finally {
+    SYNC_IN_FLIGHT = false;
+  }
+}
+async function pullSyncedForms(){
+  if (!syncReady()) return;
+  try {
+    let url;
+    if (MCKIMM_APP === "field"){
+      url = syncUrl("/sync/list") + "?scope=mine&user=" + encodeURIComponent(STATE.currentUser) + "&hours=24";
+    } else {
+      url = syncUrl("/sync/list") + "?scope=all&since=" + (STATE.lastSyncPull||0);
+    }
+    const res = await fetch(url, { headers:{ "Authorization":"Bearer "+STATE.auditWorkerToken.trim() } });
+    if (!res.ok) return;
+    const data = await res.json();
+    const incoming = Array.isArray(data.forms) ? data.forms : [];
+    incoming.forEach(serverForm=>{
+      const local = STATE.forms.find(f=>f.id===serverForm.id);
+      if (!local){
+        STATE.forms.push(serverForm);
+      } else if (!local._syncPending && (serverForm.updatedAt||0) > (local.updatedAt||0)){
+        // Only overwrite the local copy if the server is strictly newer,
+        // so a not-yet-synced local edit never gets clobbered by a pull.
+        Object.assign(local, serverForm);
+      }
+    });
+    if (MCKIMM_APP === "field"){
+      // Coaching-window prune: an operator's own submissions drop out of
+      // their own view 24h after creation, once we're sure they're safely
+      // synced — still fully retained server-side / on the desktop app.
+      const cutoff = Date.now() - 24*3600*1000;
+      STATE.forms = STATE.forms.filter(f=>{
+        const isMine = f.createdBy === STATE.currentUser;
+        const isOld = (f.createdAt||0) < cutoff;
+        const safeToPrune = !f._syncPending;
+        return !(isMine && isOld && safeToPrune);
+      });
+    }
+    STATE.lastSyncPull = Date.now();
+    localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+    if (typeof render === "function") render();
+  } catch(e){ /* offline or Worker unreachable — the next interval will retry */ }
+}
+
+window.addEventListener("online", flushPendingSyncs);
+setInterval(()=>{ flushPendingSyncs(); pullSyncedForms(); }, 60000);
 
 /* ---------- Operator access config (who can see which projects/templates) ----------
    Lives OUTSIDE localStorage-only STATE: published as operator-templates.json
@@ -4528,6 +4640,8 @@ function resetOperatorAccess(userName){
    VIEW: Settings
    ============================================================ */
 function renderSettings(){
+  const pendingSyncCount = STATE.forms.filter(f=>f._syncPending).length;
+  const eraseWarning = pendingSyncCount ? (' ' + pendingSyncCount + ' form' + (pendingSyncCount===1?'':'s') + ' have not synced yet and will be lost.') : '';
   return `
     <div class="crumbs"><span>McKimm Civil Pty Ltd</span><span class="sep">›</span><span>Settings</span></div>
     <h1 class="page-title">Settings</h1>
@@ -4560,12 +4674,21 @@ function renderSettings(){
         <input type="password" value="${esc(STATE.auditWorkerToken)}" oninput="STATE.auditWorkerToken=this.value;save()" placeholder="a long random string you also set as a Worker secret" />
         <div class="hint">A shared secret only you know, so nobody who finds the Worker URL can use it to run up your Anthropic bill. Not the Anthropic API key itself — that lives only in the Worker.</div>
       </div>
+      <h2 class="section-title">Sync</h2>
+      <div class="field">
+        <p style="color:var(--muted);margin:0 0 8px">
+          ${syncReady()
+            ? `Last synced: ${STATE.lastSyncPull ? fmtDateTime(STATE.lastSyncPull) : "never yet"} · ${pendingSyncCount} form${pendingSyncCount===1?"":"s"} waiting to sync${MCKIMM_APP==="field" ? " · showing your last 24 hours only" : " · showing every operator, always"}`
+            : "Add the Photo-analysis proxy URL and App token above to turn on sync."}
+        </p>
+        <button class="btn" onclick="pullSyncedForms().then(()=>{flushPendingSyncs();toast('Synced');render();})" ${syncReady()?"":"disabled"}>Sync now</button>
+      </div>
       <h2 class="section-title">Data</h2>
       <p style="color:var(--muted)">All data lives in this browser. Use Backup to save a snapshot to OneDrive; use Restore to load it.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn primary" onclick="exportAll()">Backup data (.json)</button>
         <button class="btn" onclick="importBackup()">Restore from .json</button>
-        <button class="btn danger" onclick="if(confirm('Erase ALL data on this device?')){STATE={forms:[],activeFolder:STATE.activeFolder,currentUser:STATE.currentUser};save();toast('Cleared');render();}">Erase all data</button>
+        <button class="btn danger" onclick="if(confirm('Erase ALL data on this device?${eraseWarning}')){STATE={forms:[],activeFolder:STATE.activeFolder,currentUser:STATE.currentUser,lastSyncPull:0};save();toast('Cleared');render();}">Erase all data</button>
       </div>
       <h2 class="section-title">About</h2>
       <p style="color:var(--muted);font-size:13px">McKimm Pivot · self-hosted construction site app, modelled on Dashpivot.<br/>
@@ -5175,3 +5298,5 @@ function renderCatTree(){
    view is already showing just updates in place). */
 loadOperatorConfig();
 loadTeamConfig();
+pullSyncedForms();
+flushPendingSyncs();

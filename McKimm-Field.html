@@ -385,6 +385,7 @@ body{ background:var(--bg); }
 
 <div class="toast" id="toast"></div>
 
+<script>window.MCKIMM_APP = "field";</script>
 <script src="mckimm-core.js"></script>
 <script>
 /* ============================================================
@@ -529,6 +530,29 @@ function renderOperatorHome(m){
       : `<div class="card op-card" style="cursor:default;display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:24px">No templates assigned to you yet — ask your admin to set your access under Users → Edit access.</div>`;
   }
 
+  const recentMine = STATE.forms
+    .filter(f=>f.createdBy===STATE.currentUser && (Date.now()-(f.createdAt||0))<24*3600*1000)
+    .sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  const recentHtml = recentMine.length ? `
+    <h2 class="section-title">Your last 24 hours</h2>
+    <div class="list"><table>
+      <thead><tr><th>Template</th><th>Title</th><th>Status</th><th>Started</th></tr></thead>
+      <tbody>
+        ${recentMine.map(f=>{
+          const t = templateById(f.templateId);
+          const title = f.data?.[t?.summary?.titleField||""] || ("Form #"+f.number);
+          return `<tr onclick="nav('form',{id:'${f.templateId}',formId:'${f.id}'})">
+            <td>${esc(t?.name||f.templateId)}</td>
+            <td><strong>${esc(title)}</strong></td>
+            <td><span class="status ${f.workflowColumn==="Approved"||f.workflowColumn==="Submitted"?"done":"wait"}">${esc(f.workflowColumn||"In progress")}</span>${f._syncPending?` <span class="status wait" title="Not yet synced to the desktop app">Syncing…</span>`:""}</td>
+            <td>${fmtDateTime(f.createdAt)}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table></div>
+    <div class="notice notice-info" style="margin-top:8px">Only shown here for 24 hours so your admin can talk through today's and yesterday's work with you — it stays saved permanently once synced.</div>
+  ` : "";
+
   m.innerHTML = `
     <h1 class="page-title">G'day, ${esc(STATE.currentUser)}</h1>
     <div class="notice notice-info" style="margin-bottom:16px">Photos taken inside any form below are stamped automatically with the date, time and your name — no extra step needed.</div>
@@ -560,6 +584,8 @@ function renderOperatorHome(m){
 
     <h2 class="section-title">Today — ${fmtDate(today)}</h2>
     <div class="grid">${quickCards}</div>
+
+    ${recentHtml}
 
     ${restrictedTemplates ? `` : `
     <h2 class="section-title">Need something else?</h2>
