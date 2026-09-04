@@ -555,6 +555,7 @@ function renderOperatorHome(m){
 
   m.innerHTML = `
     <h1 class="page-title">G'day, ${esc(STATE.currentUser)}</h1>
+    ${renderComplianceAlertBanner()}
     <div class="notice notice-info" style="margin-bottom:16px">Photos taken inside any form below are stamped automatically with the date, time and your name — no extra step needed.</div>
 
     <div class="stat-grid" style="grid-template-columns:1fr">
