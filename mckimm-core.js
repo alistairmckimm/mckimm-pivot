@@ -4156,7 +4156,7 @@ function renderAuditPhotoModal(){
       <div class="photo-strip">
         ${thumbs}
         <label class="add-photo">+
-          <input type="file" accept="image/*" capture="environment" multiple onchange="auditPhotosPicked(this.files)" />
+          <input type="file" accept="image/*" multiple onchange="auditPhotosPicked(this.files)" />
         </label>
       </div>
       <div class="hint">Take or select this audit's photo batch. They're sent only to your own Cloudflare Worker for analysis.</div>
@@ -4865,7 +4865,7 @@ function renderField(t, f, fld){
             <button class="x" onclick="removePhoto('${fld.id}',${i})">✕</button>
           </div>`).join("")}
           <label class="add-photo">+
-            <input type="file" accept="${fld.accept||"image/*"}" capture="environment" multiple onchange="addPhotos('${fld.id}', this.files)" />
+            <input type="file" accept="${fld.accept||"image/*"}" multiple onchange="addPhotos('${fld.id}', this.files)" />
           </label>
         </div></div>`;
     }
