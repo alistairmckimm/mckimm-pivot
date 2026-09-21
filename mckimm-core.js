@@ -4155,7 +4155,10 @@ function renderAuditPhotoModal(){
       <label>Audit photos (${AUDIT_AI.photos.length})</label>
       <div class="photo-strip">
         ${thumbs}
-        <label class="add-photo">+
+        <label class="add-photo" title="Take photo">📷
+          <input type="file" accept="image/*" capture="environment" onchange="auditPhotosPicked(this.files)" />
+        </label>
+        <label class="add-photo" title="Choose from gallery">🖼️
           <input type="file" accept="image/*" multiple onchange="auditPhotosPicked(this.files)" />
         </label>
       </div>
@@ -4864,7 +4867,10 @@ function renderField(t, f, fld){
             ${p.startsWith("data:image")?`<img src="${p}" />`:`<span style="font-size:11px;color:var(--muted)">PDF</span>`}
             <button class="x" onclick="removePhoto('${fld.id}',${i})">✕</button>
           </div>`).join("")}
-          <label class="add-photo">+
+          <label class="add-photo" title="Take photo">📷
+            <input type="file" accept="${fld.accept||"image/*"}" capture="environment" onchange="addPhotos('${fld.id}', this.files)" />
+          </label>
+          <label class="add-photo" title="Choose from gallery">🖼️
             <input type="file" accept="${fld.accept||"image/*"}" multiple onchange="addPhotos('${fld.id}', this.files)" />
           </label>
         </div></div>`;
