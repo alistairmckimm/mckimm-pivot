@@ -3160,18 +3160,31 @@ const TEMPLATES = [
 
 /* ---------- State / storage ---------- */
 const MCKIMM_APP = window.MCKIMM_APP || "pivot"; // "field" or "pivot" — set by the HTML shell before this script loads; drives the sync behaviour below
-const LS_KEY = "mckimm-pivot-v1";
+const LS_KEY = "mckimm-" + MCKIMM_APP + "-v1";
 const LS_KEY_OLD = "mckimm-sitemate-v1"; // pre-rename key — migrated on first load so nothing looks lost
+// Field and Pivot both used to hang off this exact same key by mistake
+// ("mckimm-pivot-v1", regardless of MCKIMM_APP) — harmless on separate
+// devices (a phone and a desktop never share localStorage), but a real
+// data-collision risk if the same browser ever opened both apps. Pivot's
+// own key is unchanged by the fix above (MCKIMM_APP defaults to "pivot"),
+// so this fallback only matters for Field, recovering its existing local
+// data once before it moves to its own "mckimm-field-v1" key below.
+const LS_KEY_SHARED_LEGACY = "mckimm-pivot-v1";
 let STATE = load();
 
 function load(){
   try {
     let raw = localStorage.getItem(LS_KEY);
+    if (!raw && MCKIMM_APP !== "pivot"){
+      const shared = localStorage.getItem(LS_KEY_SHARED_LEGACY);
+      if (shared) raw = shared;
+    }
     if (!raw){
       // migrate data saved under the app's old name (McKimm Sitemate) if present
       const old = localStorage.getItem(LS_KEY_OLD);
-      if (old){ localStorage.setItem(LS_KEY, old); raw = old; }
+      if (old) raw = old;
     }
+    if (raw) localStorage.setItem(LS_KEY, raw);
     const s = JSON.parse(raw||"{}");
     s.forms = s.forms || [];
     s.activeFolder = s.activeFolder || "Administration";
