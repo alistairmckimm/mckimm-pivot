@@ -16,7 +16,26 @@
 <script>
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(e => console.warn("SW register failed:", e));
+    navigator.serviceWorker.register("sw.js").then(reg => {
+      // A tab left open for a long stretch (very likely on a desktop
+      // dashboard) can sit for days without ever checking for a new
+      // version on its own. Ask explicitly whenever it's brought back
+      // into focus.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") reg.update().catch(()=>{});
+      });
+    }).catch(e => console.warn("SW register failed:", e));
+  });
+  // Once a newly-installed service worker takes over, the page already
+  // open is still running the OLD mckimm-core.js in memory until it's
+  // reloaded — without this, a fix can be live on the server for days
+  // and an open tab still shows the old behaviour. Reload once,
+  // automatically, the moment an update takes control.
+  let mckimmSwRefreshed = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (mckimmSwRefreshed) return;
+    mckimmSwRefreshed = true;
+    location.reload();
   });
 }
 </script>

@@ -16,7 +16,26 @@
 <script>
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw-field.js").catch(e => console.warn("SW register failed:", e));
+    navigator.serviceWorker.register("sw-field.js").then(reg => {
+      // A phone app is almost always "resumed" from the background rather
+      // than freshly launched, so it can sit for days without ever
+      // checking for a new version on its own. Ask explicitly every time
+      // it's brought back to the foreground.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") reg.update().catch(()=>{});
+      });
+    }).catch(e => console.warn("SW register failed:", e));
+  });
+  // Once a newly-installed service worker takes over, the page already
+  // open is still running the OLD mckimm-core.js in memory until it's
+  // reloaded — without this, a fix can be live on the server for days
+  // and an open/resumed app still shows the old behaviour. Reload once,
+  // automatically, the moment an update takes control.
+  let mckimmSwRefreshed = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (mckimmSwRefreshed) return;
+    mckimmSwRefreshed = true;
+    location.reload();
   });
 }
 </script>

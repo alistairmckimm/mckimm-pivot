@@ -3186,7 +3186,25 @@ function load(){
     return { forms:[], activeFolder:"Administration", currentUser:"Alistair McKimm", myDayEquipment:"", githubToken:"", auditWorkerUrl:"", auditWorkerToken:"", lastSyncPull:0 };
   }
 }
-function save(){ localStorage.setItem(LS_KEY, JSON.stringify(STATE)); scheduleSyncDebounced(); }
+function save(){
+  // localStorage.setItem can throw (most commonly QuotaExceededError once
+  // enough full-size photos pile up in browser storage). Previously this
+  // exception was unhandled, so it silently killed everything chained
+  // after save() in every caller — including the render()/toast() calls
+  // that show a photo was added or a field was saved. That's very likely
+  // what "it didn't want to save" actually was: the change was made in
+  // memory, the save failed silently, and the screen never updated to
+  // confirm it, with the failure repeating on every subsequent save until
+  // the tab was closed and the in-memory change lost. Now it's caught,
+  // surfaced, and everything after save() still runs normally.
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+  } catch(e){
+    console.error("Save failed:", e);
+    toast("⚠️ Could not save — device storage is full. Back up your data (Settings → Backup) then contact Al before it fills further.");
+  }
+  scheduleSyncDebounced();
+}
 function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
 
 /* ---------- Form sync (McKimm Field <-> McKimm Pivot) ----------
@@ -3297,7 +3315,7 @@ async function pullSyncedForms(){
 }
 
 window.addEventListener("online", flushPendingSyncs);
-setInterval(()=>{ flushPendingSyncs(); pullSyncedForms(); }, 60000);
+setInterval(()=>{ flushPendingSyncs(); pullSyncedForms(); }, 15000);
 
 /* ---------- Operator access config (who can see which projects/templates) ----------
    Lives OUTSIDE localStorage-only STATE: published as operator-templates.json
@@ -4173,29 +4191,35 @@ function renderAuditPhotoModal(){
   `;
   showModal(cfg.modalTitle, body, footer);
 }
-function auditPhotosPicked(files){
-  const tasks = Array.from(files).map(file=> new Promise(res=>{
-    if (!file.type.startsWith("image/")) return res(null);
-    const r = new FileReader();
-    r.onload = ()=>{
-      const img = new Image();
-      img.onload = ()=>{
-        const max = 1280;
-        let w=img.width, h=img.height;
-        if (w>max||h>max){ const s = max/Math.max(w,h); w=w*s; h=h*s; }
-        const c = document.createElement("canvas"); c.width=w; c.height=h;
-        c.getContext("2d").drawImage(img,0,0,w,h);
-        stampPhotoCanvas(c);
-        res(c.toDataURL("image/jpeg",0.85));
+async function auditPhotosPicked(files){
+  // Sequential for the same reason as addPhotos() below — a gallery batch
+  // of full-resolution photos decoded in parallel can hang/crash the tab
+  // on a mid-range phone.
+  const fileList = Array.from(files);
+  for (const file of fileList){
+    if (!file.type.startsWith("image/")) continue;
+    const dataUrl = await new Promise(res=>{
+      const r = new FileReader();
+      r.onload = ()=>{
+        const img = new Image();
+        img.onload = ()=>{
+          const max = 1280;
+          let w=img.width, h=img.height;
+          if (w>max||h>max){ const s = max/Math.max(w,h); w=w*s; h=h*s; }
+          const c = document.createElement("canvas"); c.width=w; c.height=h;
+          c.getContext("2d").drawImage(img,0,0,w,h);
+          stampPhotoCanvas(c);
+          res(c.toDataURL("image/jpeg",0.85));
+        };
+        img.onerror = ()=>res(null);
+        img.src = r.result;
       };
-      img.src = r.result;
-    };
-    r.readAsDataURL(file);
-  }));
-  Promise.all(tasks).then(results=>{
-    results.filter(Boolean).forEach(d=>AUDIT_AI.photos.push(d));
-    renderAuditPhotoModal();
-  });
+      r.onerror = ()=>res(null);
+      r.readAsDataURL(file);
+    });
+    if (dataUrl) AUDIT_AI.photos.push(dataUrl);
+  }
+  renderAuditPhotoModal();
 }
 function auditRemovePhoto(i){ AUDIT_AI.photos.splice(i,1); renderAuditPhotoModal(); }
 async function runAuditAnalysis(){
@@ -4681,7 +4705,7 @@ function renderSettings(){
       <div class="field">
         <p style="color:var(--muted);margin:0 0 8px">
           ${syncReady()
-            ? `Last synced: ${STATE.lastSyncPull ? fmtDateTime(STATE.lastSyncPull) : "never yet"} · ${pendingSyncCount} form${pendingSyncCount===1?"":"s"} waiting to sync${MCKIMM_APP==="field" ? " · showing your last 24 hours only" : " · showing every operator, always"}`
+            ? `Last synced: ${STATE.lastSyncPull ? fmtDateTime(STATE.lastSyncPull) : "never yet"} · ${pendingSyncCount} form${pendingSyncCount===1?"":"s"} waiting to sync · checks for updates automatically every 15 seconds while this is open${MCKIMM_APP==="field" ? " · showing your last 24 hours only" : " · showing every operator, always"}`
             : "Add the Photo-analysis proxy URL and App token above to turn on sync."}
         </p>
         <button class="btn" onclick="pullSyncedForms().then(()=>{flushPendingSyncs();toast('Synced');render();})" ${syncReady()?"":"disabled"}>Sync now</button>
@@ -4979,40 +5003,46 @@ function stampPhotoCanvas(c){
   ctx.fillText(stampText, pad, c.height-barH/2);
   return c;
 }
-function addPhotos(id, files){
+async function addPhotos(id, files){
+  // Processed one file at a time on purpose. Gallery selection can hand
+  // over a whole batch of full-resolution photos at once (a camera shot
+  // is only ever one at a time) — decoding and resizing several of those
+  // in parallel (the old Promise.all approach) spikes memory hard enough
+  // on a mid-range phone to hang or crash the tab, which looks exactly
+  // like "it won't save". Sequential keeps memory to one photo at a time.
   const arr = Array.isArray(CURRENT_FORM.data[id])?CURRENT_FORM.data[id]:[];
-  const tasks = [];
-  Array.from(files).forEach(file=>{
-    tasks.push(new Promise(res=>{
+  const fileList = Array.from(files);
+  for (const file of fileList){
+    const result = await new Promise(res=>{
+      const r = new FileReader();
       if (file.type.startsWith("image/")){
-        // compress to ~1200px max, then burn in a date/time + user stamp
-        const r = new FileReader();
         r.onload = ()=>{
           const img = new Image();
           img.onload = ()=>{
+            // compress to ~1200px max, then burn in a date/time + user stamp
             const max = 1280;
             let w=img.width, h=img.height;
             if (w>max||h>max){ const s = max/Math.max(w,h); w=w*s; h=h*s; }
             const c = document.createElement("canvas"); c.width=w; c.height=h;
             c.getContext("2d").drawImage(img,0,0,w,h);
             stampPhotoCanvas(c);
-            arr.push(c.toDataURL("image/jpeg",0.85));
-            res();
+            res(c.toDataURL("image/jpeg",0.85));
           };
+          img.onerror = ()=>res(null);
           img.src = r.result;
         };
+        r.onerror = ()=>res(null);
         r.readAsDataURL(file);
       } else {
-        const r = new FileReader();
-        r.onload = ()=>{ arr.push(r.result); res(); };
+        r.onload = ()=>res(r.result);
+        r.onerror = ()=>res(null);
         r.readAsDataURL(file);
       }
-    }));
-  });
-  Promise.all(tasks).then(()=>{
-    CURRENT_FORM.data[id]=arr; CURRENT_FORM.updatedAt=Date.now(); save(); render();
-    toast("Added "+files.length+" photo(s)");
-  });
+    });
+    if (result) arr.push(result);
+  }
+  CURRENT_FORM.data[id]=arr; CURRENT_FORM.updatedAt=Date.now(); save(); render();
+  toast("Added "+fileList.length+" photo(s)");
 }
 function removePhoto(id, idx){
   const arr = CURRENT_FORM.data[id]||[];
