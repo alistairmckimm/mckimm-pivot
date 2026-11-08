@@ -279,7 +279,7 @@
         "<strong>Emergency meeting point:</strong> the site office, with a first aid kit and fire extinguisher. <strong>Nearest hospital:</strong> Cooma.",
         "Essential Energy powerline emergency <strong>13 20 80</strong> · Telstra damage <strong>13 22 03</strong> · NBN 1800 626 329 · SES 132 500 · SafeWork NSW (notifiable incidents) 13 10 50",
         "Before You Dig Australia 1100 · LiveLocates 1300 517 062",
-"<strong>Site Supervisor and principal&rsquo;s representative:</strong> Alistair McKimm, <strong>0408 632 007</strong>",
+"<strong>Site Supervisor, principal&rsquo;s representative and appointed first aider:</strong> Alistair McKimm, <strong>0408 632 007</strong>",
 "<strong>Snowy Monaro Regional Council:</strong> 1300 345 345 (answered 24/7) · Berridale office, 2 Myack Street, Berridale, Mon&ndash;Fri 8:30am&ndash;4:30pm · consent engineer: Steven Robinson, Development Engineer"]))}
 
       ${full ? card("Still to confirm (office only)", li([
