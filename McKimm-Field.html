@@ -406,6 +406,8 @@ body{ background:var(--bg); }
 
 <script>window.MCKIMM_APP = "field";</script>
 <script src="mckimm-core.js"></script>
+<script src="mckimm-sops.js"></script>
+<script src="mckimm-projects.js"></script>
 <script>
 /* ============================================================
    McKimm Field — operator-facing shell.
@@ -449,7 +451,7 @@ function updateTopbar(){
   if (menuBtn) menuBtn.style.display = full ? "" : "none";
   if (!full){
     closeAdminDrawer();
-    if (route.view !== "operatorhome" && route.view !== "form") nav("operatorhome");
+    if (route.view !== "operatorhome" && route.view !== "form" && route.view !== "projectinfo") nav("operatorhome");
   }
 }
 
@@ -499,7 +501,7 @@ function renderOperatorHome(m){
 
   function opCard(icon, title, subtitle, existing, startAction, disabled){
     const statusHtml = existing
-      ? `<span class="status ${existing.workflowColumn==="Approved"||existing.workflowColumn==="Submitted"?"done":"wait"}">${esc(existing.workflowColumn||"In progress")}</span>`
+      ? `<span class="status ${existing.workflowColumn==="Approved"||existing.workflowColumn==="Submitted"||existing.workflowColumn==="Acknowledged"?"done":"wait"}">${esc(existing.workflowColumn||"In progress")}</span>`
       : `<span class="status">Not started</span>`;
     const btnLabel = existing ? "Continue" : "Start";
     const btnAction = existing ? `nav('form',{id:'${existing.templateId}',formId:'${existing.id}'})` : (startAction||"");
@@ -512,6 +514,14 @@ function renderOperatorHome(m){
       </div>`;
   }
 
+  const _ls = window.MCK_PROJ ? MCK_PROJ.locateStatus() : null;
+  const projCard = (window.MCK_PROJ && projectOptions.includes(MCK_PROJ.RR)) ? `
+      <div class="card op-card" style="cursor:default">
+        <div class="row"><div class="icn">📌</div>${_ls && _ls.expired ? '<span class="status wait">Locate expired</span>' : '<span class="status">Info</span>'}</div>
+        <div class="title">Project Requirements</div>
+        <div class="sub">Rockwell Road — Council hold points, spec, locate photos, documents to sign</div>
+        <button class="btn primary" style="margin-top:10px;width:100%" onclick="nav('projectinfo')">Open</button>
+      </div>` : "";
   let quickCards;
   if (!restrictedTemplates){
     quickCards = `
@@ -527,7 +537,7 @@ function renderOperatorHome(m){
   } else {
     const cards = [];
     if (restrictedTemplates.includes("MCK-Daily-Report")){
-      cards.push(opCard("📋", "Daily Report", STATE.fieldProject?("For "+STATE.fieldProject):"Select a project above first", drForm,
+      cards.push(opCard("📋", "Daily Report", STATE.fieldProject?("For "+STATE.fieldProject+((window.MCK_PROJ && STATE.fieldProject===MCK_PROJ.RR)?" — 3+ photos and sign-off at end of day":"")):"Select a project above first", drForm,
         STATE.fieldProject?`startForm('MCK-Daily-Report',{project_location:'${esc(STATE.fieldProject)}', report_date:'${today}'})`:"", !STATE.fieldProject));
     }
     if (restrictedTemplates.includes("MCK-Daily-Timesheet")){
@@ -543,7 +553,10 @@ function renderOperatorHome(m){
       const t = templateById(tid);
       if (!t) return;
       const prefillJson = esc(JSON.stringify(genericPrefillFor(tid, STATE.fieldProject)));
-      cards.push(opCard(t.icon||"▤", t.name, t.code||"", null, `startForm('${tid}', ${prefillJson})`));
+      const crewDoc = window.MCK_PROJ && MCK_PROJ.CREW_DOCS.some(d=>d[0]===tid);
+      const signed = crewDoc ? STATE.forms.find(f=>f.templateId===tid && f.data?.employee===STATE.currentUser && f.data?.acknowledge_signature?.dataUrl) : null;
+      const sub = crewDoc ? (signed ? ("Signed "+(signed.data.ack_date||"")+" · "+(signed.templateVersion||t.version)) : "Read and sign — required before work") : (t.code||"");
+      cards.push(opCard(t.icon||"▤", t.name, sub, signed||null, `startForm('${tid}', ${prefillJson})`));
     });
     quickCards = cards.length ? cards.join("")
       : `<div class="card op-card" style="cursor:default;display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:24px">No templates assigned to you yet — ask your admin to set your access under Users → Edit access.</div>`;
@@ -603,7 +616,7 @@ function renderOperatorHome(m){
     </div>
 
     <h2 class="section-title">Today — ${fmtDate(today)}</h2>
-    <div class="grid">${quickCards}</div>
+    <div class="grid">${projCard}${quickCards}</div>
 
     ${recentHtml}
 

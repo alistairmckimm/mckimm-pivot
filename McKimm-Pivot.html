@@ -324,6 +324,7 @@ h2.section-title .pill{font-size:11px;color:#fff;background:var(--brand);padding
     <div class="subnav-link" data-route="reminders"><span class="ic">⏰</span> Reminders <span class="badge" id="remindersBadge" style="display:none"></span></div>
     <div class="subnav-link" data-route="compliance"><span class="ic">✅</span> Compliance <span class="badge" id="complianceBadge" style="display:none"></span></div>
     <div class="subnav-link" data-route="users"><span class="ic">◍</span> Users <span class="badge" id="teamBadge" style="display:none"></span></div>
+    <div class="subnav-link" data-route="projectinfo"><span class="ic">📌</span> Project Requirements</div>
     <div class="subnav-link" data-route="photos"><span class="ic">▣</span> Photos</div>
     <div class="subnav-link" data-route="lists"><span class="ic">≣</span> List Library</div>
     <div class="subnav-link active" data-route="templates"><span class="ic">▤</span> Template Library</div>
@@ -356,6 +357,8 @@ h2.section-title .pill{font-size:11px;color:#fff;background:var(--brand);padding
 
 <script>window.MCKIMM_APP = "pivot";</script>
 <script src="mckimm-core.js"></script>
+<script src="mckimm-sops.js"></script>
+<script src="mckimm-projects.js"></script>
 <script>
 /* ---------- Sidebar click handlers ---------- */
 document.querySelectorAll(".side-link, .subnav-link, .myday-cta").forEach(l=>{

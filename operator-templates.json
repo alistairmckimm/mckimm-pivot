@@ -1,1 +1,53 @@
-{}
+{
+  "Simon Story": {
+    "projects": [
+      "Rockwell Road Intersection, Berridale"
+    ],
+    "templates": [
+      "MCK-Daily-Timesheet",
+      "MCK-Daily-Report",
+      "MCK-PSM-Wacker-38Z3",
+      "MCK-PSM-Sunward-SWE17",
+      "MCK-PSM-Wacker-RT82",
+      "MCK-PSM-Mitsubishi-Grader",
+      "MCK-PSM-Skid-Steer",
+      "MCK-SWMS-MobilePlant",
+      "MCK-Safety-Excavation",
+      "MCK-SOP-Services",
+      "MCK-SOP-Electric",
+      "MCK-SOP-ExcRescue",
+      "MCK-SOP-PipeLift",
+      "MCK-DAR-002",
+      "MCK-Safety-TrenchInsp",
+      "MCK-Safety-Employ",
+      "MCK-Enviro-Monitor",
+      "MCK-NCR"
+    ],
+    "fullAccess": false
+  },
+  "William Westaway": {
+    "projects": [
+      "Rockwell Road Intersection, Berridale"
+    ],
+    "templates": [
+      "MCK-Daily-Report",
+      "MCK-PSM-Wacker-38Z3",
+      "MCK-PSM-Sunward-SWE17",
+      "MCK-PSM-Wacker-RT82",
+      "MCK-PSM-Mitsubishi-Grader",
+      "MCK-PSM-Skid-Steer",
+      "MCK-SWMS-MobilePlant",
+      "MCK-Safety-Excavation",
+      "MCK-SOP-Services",
+      "MCK-SOP-Electric",
+      "MCK-SOP-ExcRescue",
+      "MCK-SOP-PipeLift",
+      "MCK-DAR-002",
+      "MCK-Safety-TrenchInsp",
+      "MCK-Safety-Employ",
+      "MCK-Enviro-Monitor",
+      "MCK-NCR"
+    ],
+    "fullAccess": false
+  }
+}
