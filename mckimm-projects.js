@@ -24,7 +24,7 @@
 
   /* ---- Locate report (LiveLocates LL260383) ---- */
   const LOCATE = {
-    cleared:"Telstra was potholed in July 2026 and no services have been run into the area since (confirmed by Al, 8 Nov 2026).",
+    cleared:"Telstra was potholed in July 2026 and no services have been run into the area since; Al is monitoring the property and confirmed this on 8 Nov 2026.",
     ref:"LL260383", company:"LiveLocates", phone:"1300 517 062", date:"2026-06-24", days:30,
     notes:"Telstra runs up through the paddock and was marked out at three locations. Traceable Telstra lines: copper x3 and optic fibre x1. BYDA plans show nothing else in the area. The optic fibre loses trace after the first location and has no trace wire until after the second location at the gate (shown in the photos); it is only QL-D at the gate — depth unknown and alignment is an estimate. LiveLocates recommends QL-A (potholing by non-destructive digging, e.g. HydroVac) on any service that may be impacted by the works.",
     photos:[
