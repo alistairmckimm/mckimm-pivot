@@ -217,6 +217,7 @@ const TEMPLATES = [
       {id:"tasks", title:"Work Task Recording",
         info:"Employees are required to breakdown their daily activity reporting. They must identify each Project or Location, the amount of time at the project, a summary of the tasks performed, and photos of the work.\n\nNew Projects can be added by using the + Add row button. Note – The sum of the Project Times cannot exceed the daily recorded hours.\n\nExample – Employee was doing excavation at a Roadside Project and was asked to drop a Skip Bin for another project. Record both as separate rows.",
         fields:[
+          {id:"day_summary", label:"Overview of what you did today (tap the microphone and talk)", type:"textarea", voice:true},
           {id:"project_breakdown", label:"Project Breakdown", type:"table", columns:["Work Project","Project Time (hours)","Task Summary","Task Photos (filename or note)"]}
       ]},
       {id:"fatigue", title:"Fatigue Check (ISO 45001 §6.1.2.1)",
@@ -228,7 +229,7 @@ const TEMPLATES = [
       {id:"declaration", title:"Declaration",
         info:"I declare the worked hours are correct and have provided the required Images.",
         fields:[
-          {id:"employee_signoff", label:"Employee Signoff", type:"signature"}
+          {id:"employee_signoff", label:"Employee Signoff", type:"signature", requiresText:{field:"day_summary", minChars:20, message:"Add an overview of your day first: tap the microphone under Work Task Recording and talk"}}
       ]},
       {id:"attachments", title:"Form Attachments", fields:[
         {id:"attachments", label:"Add PDF", type:"photos", accept:"image/*,application/pdf"}
@@ -263,7 +264,7 @@ const TEMPLATES = [
         {id:"delay_detail", label:"If yes, details", type:"textarea"}
       ]},
       {id:"shift", title:"Shift Activities & Comments", fields:[
-        {id:"shift_activities", label:"Shift Activities, Work Executed, Rate of Production, General Comments", type:"textarea"}
+        {id:"shift_activities", label:"Shift Activities, Work Executed, Rate of Production, General Comments", type:"textarea", voice:true}
       ]},
       {id:"materials", title:"Materials Purchased/Imported/Exported", fields:[
         {id:"materials", label:"Materials", type:"textarea"}
@@ -295,7 +296,7 @@ const TEMPLATES = [
          of the day's work are attached. The signature itself refuses to lock until 3 photos are in progress_photos. */
       {id:"eod", title:"End-of-Day Sign-Off", fields:[
         {id:"eod_photo_rule", label:"", type:"photoRule", photoField:"progress_photos", min:3, showIf:{field:"project_location", equals:"Rockwell Road Intersection, Berridale"}},
-        {id:"eod_signature", label:"End-of-day sign-off — I took at least 3 photos of today's work and they are attached above", type:"signature", requiresPhotos:{field:"progress_photos", min:3}, showIf:{field:"project_location", equals:"Rockwell Road Intersection, Berridale"}}
+        {id:"eod_signature", label:"End-of-day sign-off — I took at least 3 photos of today's work, they are attached above, and I have said what I did today", type:"signature", requiresPhotos:{field:"progress_photos", min:3}, requiresText:{field:"shift_activities", minChars:30, message:"Add what you did today first: tap the microphone under Shift Activities and talk"}, showIf:{field:"project_location", equals:"Rockwell Road Intersection, Berridale"}}
       ]}
     ]
   },
@@ -4838,6 +4839,12 @@ function renderField(t, f, fld){
       return `<div class="field"><label>${esc(fld.label)}${req}</label>
         <input type="time" value="${esc(v||"")}" oninput="setField('${fld.id}', this.value)" /></div>`;
     case "textarea":
+      if (fld.voice) return `<div class="field"><label>${esc(fld.label)}${req}</label>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 6px">
+          <button type="button" class="btn primary voice-btn" data-vfield="${fld.id}" onclick="voiceToggle('${fld.id}', this)" style="font-size:16px;padding:10px 16px">🎤 Tap and talk</button>
+          <span class="voice-status" data-vstatus="${fld.id}" style="font-size:13px;color:var(--muted,#64748b)">Talk for a minute about what you did today. You can fix the words afterwards.</span>
+        </div>
+        <textarea data-vtext="${fld.id}" style="min-height:140px" oninput="setField('${fld.id}', this.value)">${esc(v||"")}</textarea></div>`;
       return `<div class="field"><label>${esc(fld.label)}${req}</label>
         <textarea oninput="setField('${fld.id}', this.value)">${esc(v||"")}</textarea></div>`;
     case "select":
@@ -5115,12 +5122,75 @@ function clearSigCanvas(fid){
   const c = document.querySelector(`.sig[data-field="${fid}"] canvas`);
   const ctx = c.getContext("2d"); ctx.clearRect(0,0,c.width,c.height);
 }
+/* ---------------- Voice dictation (tap the microphone and talk) ----------------
+   Uses the browser's speech recognition where it exists (Chrome/Edge on Android and desktop, Safari in the browser).
+   Where it does not (some home-screen app modes), the keyboard microphone on the phone does the same job. */
+const VOICE = { rec:null, fid:null, btn:null, active:false, base:"" };
+function voiceStatus(fid, msg){ const el = document.querySelector(`[data-vstatus="${fid}"]`); if (el) el.textContent = msg; }
+function voiceStop(){
+  VOICE.active = false;
+  try { if (VOICE.rec) VOICE.rec.stop(); } catch(e){}
+  if (VOICE.btn){ VOICE.btn.textContent = "🎤 Tap and talk"; VOICE.btn.classList.remove("danger"); VOICE.btn.classList.add("primary"); }
+  if (VOICE.fid) voiceStatus(VOICE.fid, "Stopped. Check the words, then carry on.");
+}
+function voiceToggle(fid, btn){
+  if (VOICE.active && VOICE.fid === fid){ voiceStop(); return; }
+  if (VOICE.active) voiceStop();
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR){
+    voiceStatus(fid, "Talking isn't available in this app on your phone. Tap in the box and use the microphone on your phone keyboard instead.");
+    toast("Use the microphone on your keyboard");
+    const ta = document.querySelector(`[data-vtext="${fid}"]`); if (ta) ta.focus();
+    return;
+  }
+  const ta = document.querySelector(`[data-vtext="${fid}"]`);
+  if (!ta) return;
+  VOICE.fid = fid; VOICE.btn = btn; VOICE.active = true;
+  VOICE.base = ta.value ? ta.value.replace(/\s+$/,"") + " " : "";
+  let finals = "";
+  const rec = new SR();
+  rec.lang = "en-AU"; rec.continuous = true; rec.interimResults = true;
+  rec.onresult = ev => {
+    let interim = "";
+    for (let i = ev.resultIndex; i < ev.results.length; i++){
+      const t = ev.results[i][0].transcript;
+      if (ev.results[i].isFinal) finals += t.trim() + ". "; else interim += t;
+    }
+    const text = (VOICE.base + finals + interim.trim()).replace(/\s+\./g,".").replace(/ {2,}/g," ");
+    ta.value = text; setField(fid, text);
+  };
+  rec.onerror = ev => {
+    if (ev.error === "not-allowed" || ev.error === "service-not-allowed"){
+      VOICE.active = false;
+      voiceStatus(fid, "The microphone is blocked. Allow the microphone for this app in your phone settings, or use the keyboard microphone.");
+      if (btn){ btn.textContent = "🎤 Tap and talk"; btn.classList.remove("danger"); btn.classList.add("primary"); }
+    } else if (ev.error === "network"){
+      voiceStatus(fid, "Talking needs a phone signal. Use the keyboard microphone, or type it, if you have no coverage.");
+    }
+  };
+  rec.onend = () => {
+    if (VOICE.active && VOICE.fid === fid){        // phones end the session on pauses; keep going until Stop
+      VOICE.base = ta.value ? ta.value.replace(/\s+$/,"") + " " : ""; finals = "";
+      try { rec.start(); } catch(e){}
+    }
+  };
+  try {
+    rec.start(); VOICE.rec = rec;
+    btn.textContent = "⏹ Stop"; btn.classList.remove("primary"); btn.classList.add("danger");
+    voiceStatus(fid, "Listening... talk normally, tap Stop when you are done.");
+  } catch(e){ VOICE.active = false; voiceStatus(fid, "Couldn't start the microphone. Use the keyboard microphone instead."); }
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden && VOICE.active) voiceStop(); });
 function signNow(fid){
   const _t = templateById(CURRENT_FORM.templateId);
   const _def = _t && (_t.sections||[]).reduce((a,s)=>a.concat(s.fields||[]),[]).find(x=>x.id===fid);
   if (_def && _def.requiresPhotos){
     const _n = (Array.isArray(CURRENT_FORM.data[_def.requiresPhotos.field])?CURRENT_FORM.data[_def.requiresPhotos.field]:[]).filter(p=>typeof p==="string" && p.startsWith("data:image")).length;
     if (_n < _def.requiresPhotos.min){ toast("Add at least "+_def.requiresPhotos.min+" photos of today's work first ("+_n+" so far)"); return; }
+  }
+  if (_def && _def.requiresText){
+    const _tf = _def.requiresText, _txt = String(CURRENT_FORM.data[_tf.field]||"").trim();
+    if (_txt.length < (_tf.minChars||20)){ toast(_tf.message || "Add a short summary of what you did today first (tap the microphone and talk)"); return; }
   }
   const c = document.querySelector(`.sig[data-field="${fid}"] canvas`);
   const ctx = c.getContext("2d");

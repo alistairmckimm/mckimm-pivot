@@ -537,7 +537,7 @@ function renderOperatorHome(m){
   } else {
     const cards = [];
     if (restrictedTemplates.includes("MCK-Daily-Report")){
-      cards.push(opCard("📋", "Daily Report", STATE.fieldProject?("For "+STATE.fieldProject+((window.MCK_PROJ && STATE.fieldProject===MCK_PROJ.RR)?" — 3+ photos and sign-off at end of day":"")):"Select a project above first", drForm,
+      cards.push(opCard("📋", "Daily Report", STATE.fieldProject?("For "+STATE.fieldProject+((window.MCK_PROJ && STATE.fieldProject===MCK_PROJ.RR)?" — talk or type what you did, 3+ photos, then sign off":"")):"Select a project above first", drForm,
         STATE.fieldProject?`startForm('MCK-Daily-Report',{project_location:'${esc(STATE.fieldProject)}', report_date:'${today}'})`:"", !STATE.fieldProject));
     }
     if (restrictedTemplates.includes("MCK-Daily-Timesheet")){
