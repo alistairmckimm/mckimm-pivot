@@ -241,7 +241,7 @@
 
       ${card("Council consent — Snowy Monaro Regional Council", `<p><strong>S138 Roads Act consent 138.2024.76.1</strong> dated 1 Aug 2025, Development Engineer Steven Robinson, Council 1300 345 345. Scope: widened vehicular intersection with Rockwell Road (road reserve adjoining 21 Boundary Street, Lot 5 DP1294499); install 450 mm RCP and extend the existing 475 mm poly pipe, with headwalls; reshape existing table drains. Works are as shown on the Council-stamped plans.</p>${li([
         "<strong>Traffic Guidance Scheme</strong> (AS 1742.3): submitted to Council and approved. Follow it on the day.",
-        "Council informed <strong>2 days before starting</strong> and <strong>within 2 days of completion</strong>. Alistair McKimm gives this notice by phone call or text message to the Council engineer as soon as the job is ready to go.",
+        "Council informed <strong>2 days before starting</strong> and <strong>within 2 days of completion</strong>. Alistair McKimm gives the start notice by email to Council as soon as the job is ready to go; keep a copy of the email.",
         "Underground crossings perpendicular to the road alignment, min <strong>600 mm cover</strong> at any point across the reserve including table drains. Permanent markers each side of the road for a pipeline.",
         "Driveway at <strong>90°</strong> to the road; crossing to Council standard drawings (Austroads Rural Property Access, Figure 7.2) or other attached drawing.",
         "Restore <strong>all</strong> disturbed surfaces to Council&rsquo;s satisfaction (Council specification for restoration of road openings).",
