@@ -6,6 +6,7 @@
     "templates": [
       "MCK-Daily-Timesheet",
       "MCK-Daily-Report",
+      "MCK-PSM-Komatsu-PC200",
       "MCK-PSM-Wacker-38Z3",
       "MCK-PSM-Sunward-SWE17",
       "MCK-PSM-Wacker-RT82",
@@ -31,6 +32,7 @@
     ],
     "templates": [
       "MCK-Daily-Report",
+      "MCK-PSM-Komatsu-PC200",
       "MCK-PSM-Wacker-38Z3",
       "MCK-PSM-Sunward-SWE17",
       "MCK-PSM-Wacker-RT82",
