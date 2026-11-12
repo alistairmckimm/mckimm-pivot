@@ -55,6 +55,7 @@ const SEED = [
  {id:"SP-05", name:"Honda 2 inch pump", category:"Small plant", make:"Honda", model:"2 inch", meterType:"none", serviceMonths:"6"},
  {id:"SP-06", name:"2 inch water pump on the NPR 400", category:"Small plant", make:"", model:"2 inch", meterType:"none", serviceMonths:"6", notes:"Mounted on TK-03."},
  {id:"SP-07", name:"Wacker Neuson jumping jack rammer", category:"Small plant", make:"Wacker Neuson", model:"Rammer", meterType:"none", serviceMonths:"6"},
+ {id:"OT-01", name:"Vermeer BC1000XL chipper", category:"Other", make:"Vermeer", model:"BC1000XL", meterType:"hours", notes:"Wood chipper. Check blades, feed rollers and safety stop bar."},
  {id:"IN-01", name:"Redback dual grade laser 1", category:"Instrument", make:"Redback", model:"Dual grade laser", meterType:"none", serviceMonths:"12", notes:"Calibration every 12 months until we confirm the manufacturer interval."},
  {id:"IN-02", name:"Redback dual grade laser 2", category:"Instrument", make:"Redback", model:"Dual grade laser", meterType:"none", serviceMonths:"12", notes:"Calibration every 12 months until we confirm the manufacturer interval."}
 ].map(a => Object.assign({year:"",serial:"",rego:"",regoDue:"",meter:"",meterDate:"",serviceEvery:"",serviceMonths:"",lastServiceMeter:"",lastServiceDate:"",inspYearly:"",inspDue:"",status:"Active",hire:"No",notes:"",updatedAt:1},a));
