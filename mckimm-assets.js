@@ -60,7 +60,7 @@ const SEED = [
  {id:"OT-01", name:"Vermeer BC1000XL chipper", category:"Other", make:"Vermeer", model:"BC1000XL", meterType:"hours", notes:"Wood chipper. Check blades, feed rollers and safety stop bar.", serviceEvery:"250", serviceSource:"Provisional - standard figure, check it against the machine's own manual."},
  {id:"IN-01", name:"Redback dual grade laser 1", category:"Instrument", make:"Redback", model:"Dual grade laser", meterType:"none", serviceMonths:"12", notes:"Calibration every 12 months until we confirm the manufacturer interval.", serviceSource:"Provisional - 12 months is the usual calibration interval. Redback manual interval not found."},
  {id:"IN-02", name:"Redback dual grade laser 2", category:"Instrument", make:"Redback", model:"Dual grade laser", meterType:"none", serviceMonths:"12", notes:"Calibration every 12 months until we confirm the manufacturer interval.", serviceSource:"Provisional - 12 months is the usual calibration interval. Redback manual interval not found."}
-].map(a => Object.assign({year:"",serial:"",rego:"",regoDue:"",meter:"",meterDate:"",serviceEvery:"",serviceMonths:"",lastServiceMeter:"",lastServiceDate:"",inspYearly:"",inspDue:"",serviceSource:"",status:"Active",hire:"No",notes:"",updatedAt:3},a));
+].map(a => Object.assign({year:"",serial:"",rego:"",regoDue:"",meter:"",meterDate:"",serviceEvery:"",serviceMonths:"",lastServiceMeter:"",lastServiceDate:"",inspYearly:"",inspDue:"",serviceSource:"",lender:"",ownerProof:"",ppsrSearchDate:"",ppsrResult:"",ppsrRegNo:"",ppsrExpiry:"",status:"Active",hire:"No",notes:"",updatedAt:3},a));
 
 /* ---------- Data: cached on this device, shared through assets.json ---------- */
 let DATA = { assets: SEED.map(a=>({...a})), mechanics: [], mechUpdatedAt: 0, dirty:false };
@@ -188,6 +188,14 @@ function assess(a){
       items.push({key:"inspection", state, days, text: days < 0 ? "Yearly inspection OVERDUE since " + niceDate(a.inspDue) : "Yearly inspection due " + niceDate(a.inspDue) + " (" + days + " day" + (days===1?"":"s") + ")"});
     }
   }
+  // PPSR: ownership search, and registration for anything that goes out on hire
+  if (a.ppsrResult === "Claim found") items.push({key:"ppsr", state:"overdue", text:"PPSR search found someone else's claim. Check it with the lender."});
+  else if (a.ppsrExpiry){
+    const days = daysUntil(a.ppsrExpiry), state = days < 0 ? "overdue" : days <= 60 ? "soon" : "ok";
+    items.push({key:"ppsr", state, days, text: days < 0 ? "PPSR registration EXPIRED " + niceDate(a.ppsrExpiry) : "PPSR registration runs to " + niceDate(a.ppsrExpiry) + " (" + days + " days)"});
+  }
+  else if (a.hire === "Yes") items.push({key:"ppsr", state:"soon", text:"For hire: register on the PPSR before it goes out"});
+  else if (!a.ppsrSearchDate) items.push({key:"ppsr", state:"setup", text:"PPSR ownership search not done yet"});
   const rank = {overdue:3, soon:2, setup:1, ok:0};
   const worst = items.reduce((w, i) => rank[i.state] > rank[w] ? i.state : w, items.length ? "ok" : "none");
   // is it safe to use? the latest record (not a plain check that says safe) decides, plus the register status
@@ -243,7 +251,7 @@ window.MCK_RENDER_ASSETINFO = function(f, fld){
   if (!a) return `<div class="field"><div class="notice notice-info">Pick the machine, truck or tool. If it is not in the list, choose <em>Other / not listed</em> and say what it is in the box below.</div></div>`;
   const s = assess(a), parts = [];
   if (s.reading != null) parts.push("Last reading <strong>" + fmtN(s.reading) + " " + s.unit + "</strong>" + (s.readingDate ? " (" + niceDate(s.readingDate) + ")" : ""));
-  if (!FIELD){ s.items.filter(i => i.key !== "rego" && i.key !== "inspection").forEach(i => parts.push(i.text)); }
+  if (!FIELD){ s.items.filter(i => ["rego","inspection","ppsr"].indexOf(i.key) < 0).forEach(i => parts.push(i.text)); }
   if (s.use === "out") parts.push("<strong>" + esc(s.useWhy) + "</strong>");
   const bad = s.use === "out" || s.worst === "overdue";
   return `<div class="field"><div class="notice notice-${bad ? "danger" : "info"}"><strong>${esc(a.name)}</strong>${a.rego ? " · " + esc(a.rego) : ""}<br>${parts.join(" · ") || "No reading in the register yet. Enter the hours or km from the meter below."}</div></div>`;
@@ -294,7 +302,7 @@ window.MCKA = {
     closeModal(); MCKA.log(id, kind);
   },
   edit(id){
-    const a = id ? assetById(id) : { id:"", name:"", category:"Excavator", make:"", model:"", year:"", serial:"", rego:"", regoDue:"", meterType:"hours", meter:"", meterDate:"", serviceEvery:"", serviceMonths:"", lastServiceMeter:"", lastServiceDate:"", inspYearly:"", inspDue:"", serviceSource:"", status:"Active", hire:"No", notes:"" };
+    const a = id ? assetById(id) : { id:"", name:"", category:"Excavator", make:"", model:"", year:"", serial:"", rego:"", regoDue:"", meterType:"hours", meter:"", meterDate:"", serviceEvery:"", serviceMonths:"", lastServiceMeter:"", lastServiceDate:"", inspYearly:"", inspDue:"", serviceSource:"", lender:"", ownerProof:"", ppsrSearchDate:"", ppsrResult:"", ppsrRegNo:"", ppsrExpiry:"", status:"Active", hire:"No", notes:"" };
     const sel = (key, opts) => `<select id="mcka_${key}">${opts.map(o => `<option ${String(a[key]||"")===o?"selected":""}>${esc(o)}</option>`).join("")}</select>`;
     const inp = (key, type, ph) => `<input id="mcka_${key}" type="${type||"text"}" value="${esc(a[key]||"")}" placeholder="${esc(ph||"")}">`;
     const row = (label, html, hint) => `<div class="field"><label>${esc(label)}</label>${html}${hint?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${hint}</div>`:""}</div>`;
@@ -315,6 +323,13 @@ window.MCKA = {
         ${row("Or service every (months)", sel("serviceMonths", ["","6","12","24"]), "For small plant: 6 or 12 months, depending on how hard it works. For lasers and other instruments: the calibration interval (usually 12).")}
         ${row("Date of the last service", inp("lastServiceDate","date"))}
         ${row("Where did the interval come from?", inp("serviceSource","text","e.g. Komatsu manual, p.8"), "Start it with the word Provisional if you have not checked it against the manual.")}
+        <h4 style="margin:14px 0 4px">Ownership and PPSR</h4>
+        ${row("Proof we own it", inp("ownerProof","text","e.g. invoice from Smith Plant, 3 Mar 2021"), "The PPSR is not a register of ownership. Keep the invoice or bill of sale.")}
+        ${row("Finance or lender (if any)", inp("lender"))}
+        ${row("Date of the last PPSR search", inp("ppsrSearchDate","date"), "Search by the serial number or VIN above.")}
+        ${row("Search result", sel("ppsrResult", ["","Clear","Claim found"]))}
+        ${row("PPSR registration number (if you registered it)", inp("ppsrRegNo"))}
+        ${row("Registration expires", inp("ppsrExpiry","date"), "A registration lasts up to 7 years.")}
         ${row("Status", sel("status", STATUSES), "Choose Sold / disposed to remove it from the pick-lists without losing its history.")}
         ${row("Available for hire?", sel("hire", ["No","Yes"]))}
         ${row("Notes", `<textarea id="mcka_notes" rows="2">${esc(a.notes||"")}</textarea>`)}
@@ -331,7 +346,7 @@ window.MCKA = {
       const used = DATA.assets.filter(x => x.id && x.id.indexOf(p + "-") === 0).map(x => parseInt(x.id.split("-")[1], 10) || 0);
       a.id = p + "-" + String((used.length ? Math.max.apply(null, used) : 0) + 1).padStart(2, "0");
     }
-    ["name","category","make","model","year","serial","rego","regoDue","meterType","meter","serviceEvery","lastServiceMeter","serviceMonths","lastServiceDate","inspYearly","inspDue","serviceSource","status","hire","notes"].forEach(k => { a[k] = g(k); });
+    ["name","category","make","model","year","serial","rego","regoDue","meterType","meter","serviceEvery","lastServiceMeter","serviceMonths","lastServiceDate","inspYearly","inspDue","serviceSource","lender","ownerProof","ppsrSearchDate","ppsrResult","ppsrRegNo","ppsrExpiry","status","hire","notes"].forEach(k => { a[k] = g(k); });
     if (a.meter) a.meterDate = today();
     touch(a); closeModal(); toast("Saved"); render();
   },
@@ -359,9 +374,9 @@ function tableRows(){
     if (FIELD) return `<tr><td onclick="MCKA.open('${esc(a.id)}')" style="cursor:pointer"><strong>${esc(a.id)}</strong> ${esc(a.name)}<div style="font-size:12px;color:var(--muted)">${esc(a.category)}</div></td>
       <td style="text-align:right"><button class="btn sm primary" onclick="MCKA.log('${esc(a.id)}','')">🎤 Log work</button></td></tr>`;
     const s = assess(a);
-    const main = s.items.filter(i => i.key !== "rego" && i.key !== "inspection").sort((x,y) => ({overdue:0,soon:1,setup:2,ok:3}[x.state]) - ({overdue:0,soon:1,setup:2,ok:3}[y.state]))[0];
+    const main = s.items.filter(i => ["rego","inspection","ppsr"].indexOf(i.key) < 0).sort((x,y) => ({overdue:0,soon:1,setup:2,ok:3}[x.state]) - ({overdue:0,soon:1,setup:2,ok:3}[y.state]))[0];
     const nextTxt = main ? `${pill(main.state==="overdue"?"Overdue":main.state==="soon"?"Due soon":main.state==="setup"?"Set up":"OK", main.state)} <span style="font-size:13px">${esc(main.text)}</span>` : `<span style="color:var(--muted);font-size:13px">No schedule set</span>`;
-    const regs = s.items.filter(i => (i.key === "rego" || i.key === "inspection") && i.state !== "ok");
+    const regs = s.items.filter(i => (i.key === "rego" || i.key === "inspection" || (i.key === "ppsr" && i.state !== "setup")) && i.state !== "ok");
     return `<tr onclick="MCKA.open('${esc(a.id)}')" style="cursor:pointer">
       <td><strong>${esc(a.id)}</strong></td>
       <td>${esc(a.name)}<div style="font-size:12px;color:var(--muted)">${esc(a.category)}${a.rego ? " · " + esc(a.rego) : ""}</div></td>
@@ -413,7 +428,7 @@ function renderDetail(m, id){
   if (!a){ UI.selected = null; return renderRegister(m); }
   const s = FIELD ? null : assess(a);
   const logs = logsFor(a).sort((x,y) => logDate(y).localeCompare(logDate(x)) || (y.createdAt||0)-(x.createdAt||0));
-  const info = [["Type", a.category], ["Make / model", [a.make, a.model].filter(Boolean).join(" ")], ["Year", a.year], ["Serial / VIN", a.serial], ["Rego", a.rego + (a.regoDue ? " (due " + niceDate(a.regoDue) + ")" : "")], ["Measured in", a.meterType === "none" ? "calendar only" : a.meterType], ["Hire", a.hire === "Yes" ? "Available for hire" : ""], ["Notes", a.notes]].filter(r => r[1] && r[1].trim());
+  const info = [["Type", a.category], ["Make / model", [a.make, a.model].filter(Boolean).join(" ")], ["Year", a.year], ["Serial / VIN", a.serial], ["Proof of ownership", a.ownerProof], ["Lender", a.lender], ["PPSR search", a.ppsrSearchDate ? niceDate(a.ppsrSearchDate) + (a.ppsrResult ? " - " + a.ppsrResult : "") : ""], ["PPSR registration", a.ppsrRegNo], ["Rego", a.rego + (a.regoDue ? " (due " + niceDate(a.regoDue) + ")" : "")], ["Measured in", a.meterType === "none" ? "calendar only" : a.meterType], ["Hire", a.hire === "Yes" ? "Available for hire" : ""], ["Notes", a.notes]].filter(r => r[1] && r[1].trim());
   const sched = s ? s.items.map(i => `<div style="padding:4px 0">${pill(i.state==="overdue"?"Overdue":i.state==="soon"?"Due soon":i.state==="setup"?"Set up":"OK", i.state)} ${esc(i.text)}</div>`).join("") || `<span style="color:var(--muted)">No service schedule yet. Use Edit and fill in “Service every”.</span>` : "";
   m.innerHTML = `<div style="max-width:1000px">
     <div class="crumbs"><span onclick="MCKA.back()" style="cursor:pointer">‹ Asset Register</span></div>
