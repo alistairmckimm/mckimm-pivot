@@ -43,6 +43,14 @@ const SEED = [
  {id:"FK-01", name:"Nissan 1.5 t forklift", category:"Forklift", make:"Nissan", model:"1.5 t", meterType:"hours", notes:"Kept at the depot."},
  {id:"TK-01", name:"Isuzu FSR 500 tipper", category:"Truck", make:"Isuzu", model:"FSR 500", meterType:"km", inspYearly:"Yes"},
  {id:"TK-02", name:"Isuzu FRR 550 hook lift (Merrill bin lifter)", category:"Truck", make:"Isuzu", model:"FRR 550", meterType:"km", inspYearly:"Yes", notes:"Merrill bin lifter body. Used regularly. Yearly roadworthiness inspection (NSW)."},
+ {id:"TK-03", name:"Isuzu NPR 400 site truck (bitumen)", category:"Truck", make:"Isuzu", model:"NPR 400", meterType:"km", inspYearly:"Yes", notes:"Bitumen truck. Has a 2 inch water pump on the back (see SP-06)."},
+ {id:"SP-01", name:"Red Roo turf cutter", category:"Small plant", make:"Red Roo", model:"", meterType:"none", serviceMonths:"6"},
+ {id:"SP-02", name:"Husqvarna road saw (600 mm blade)", category:"Small plant", make:"Husqvarna", model:"Road saw", meterType:"none", serviceMonths:"6", notes:"600 mm blade. Check the blade and guard before each use."},
+ {id:"SP-03", name:"8 kVA generator", category:"Small plant", make:"", model:"8 kVA", meterType:"none", serviceMonths:"6"},
+ {id:"SP-04", name:"Chainsaws (all, one line for now)", category:"Small plant", make:"", model:"", meterType:"none", serviceMonths:"6", notes:"Split into one line per saw once we have the makes and how many."},
+ {id:"SP-05", name:"Honda 2 inch pump", category:"Small plant", make:"Honda", model:"2 inch", meterType:"none", serviceMonths:"6"},
+ {id:"SP-06", name:"2 inch water pump on the NPR 400", category:"Small plant", make:"", model:"2 inch", meterType:"none", serviceMonths:"6", notes:"Mounted on TK-03."},
+ {id:"SP-07", name:"Wacker Neuson jumping jack rammer", category:"Small plant", make:"Wacker Neuson", model:"Rammer", meterType:"none", serviceMonths:"6"},
  {id:"IN-01", name:"Redback dual grade laser 1", category:"Instrument", make:"Redback", model:"Dual grade laser", meterType:"none", serviceMonths:"12", notes:"Calibration every 12 months until we confirm the manufacturer interval."},
  {id:"IN-02", name:"Redback dual grade laser 2", category:"Instrument", make:"Redback", model:"Dual grade laser", meterType:"none", serviceMonths:"12", notes:"Calibration every 12 months until we confirm the manufacturer interval."}
 ].map(a => Object.assign({year:"",serial:"",rego:"",regoDue:"",meter:"",meterDate:"",serviceEvery:"",serviceMonths:"",lastServiceMeter:"",lastServiceDate:"",inspYearly:"",inspDue:"",status:"Active",hire:"No",notes:"",updatedAt:1},a));
