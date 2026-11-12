@@ -19,11 +19,13 @@ if (typeof TEMPLATES === "undefined") return;
 const LS_KEY_ASSETS = "mckimm-assets-v1";
 const REPO = "alistairmckimm/mckimm-pivot";
 const FIELD = (typeof MCKIMM_APP !== "undefined" && MCKIMM_APP === "field");
-const CATS = ["Excavator","Loader / skid steer","Grader","Roller","Truck","Ute / vehicle","Trailer","Small plant","Attachment","Other"];
-const PREFIX = {"Excavator":"EX","Loader / skid steer":"SS","Grader":"GR","Roller":"RL","Truck":"TK","Ute / vehicle":"UT","Trailer":"TR","Small plant":"SP","Attachment":"AT","Other":"OT"};
+const CATS = ["Excavator","Loader / skid steer","Grader","Roller","Truck","Ute / vehicle","Trailer","Small plant","Instrument","Attachment","Other"];
+const PREFIX = {"Excavator":"EX","Loader / skid steer":"SS","Grader":"GR","Roller":"RL","Truck":"TK","Ute / vehicle":"UT","Trailer":"TR","Small plant":"SP","Instrument":"IN","Attachment":"AT","Other":"OT"};
 const STATUSES = ["Active","Out of service","Hired out","Sold / disposed"];
-const KINDS = ["Service","Repair","Problem found","Daily check","Other"];
-const NEEDS_MECHANIC = ["Service","Repair","Other"];   // work the crew did: a qualified mechanic signs these
+const KINDS = ["Service","Calibration","Repair","Problem found","Daily check","Other"];
+const NEEDS_MECHANIC = ["Service","Repair","Other"];   // (a calibration is backed by the lab certificate photo, not a mechanic)
+const isSvc = k => k === "Service" || k === "Calibration";
+const svcWord = a => a.category === "Instrument" ? "calibration" : "service";   // work the crew did: a qualified mechanic signs these
 const AFTER = ["Safe to use","Needs attention soon","Do not use - tag out"];
 const OTHER_MECH = "Other (type name below)";
 const NEEDS_SHOW = {field:"mm_kind", includesAny:NEEDS_MECHANIC};
@@ -36,7 +38,9 @@ const SEED = [
  {id:"EX-04", name:"Sunward SWE-17", category:"Excavator", make:"Sunward", model:"SWE-17", meterType:"hours", psm:"MCK-PSM-Sunward-SWE17"},
  {id:"GR-01", name:"Mitsubishi MG100 Grader", category:"Grader", make:"Mitsubishi", model:"MG100", meterType:"hours", psm:"MCK-PSM-Mitsubishi-Grader"},
  {id:"RL-01", name:"Wacker Neuson RT82 Roller", category:"Roller", make:"Wacker Neuson", model:"RT82", meterType:"hours", psm:"MCK-PSM-Wacker-RT82"},
- {id:"SS-01", name:"Skid Steer", category:"Loader / skid steer", make:"", model:"", meterType:"hours", psm:"MCK-PSM-Skid-Steer"}
+ {id:"SS-01", name:"Skid Steer", category:"Loader / skid steer", make:"", model:"", meterType:"hours", psm:"MCK-PSM-Skid-Steer"},
+ {id:"IN-01", name:"Redback dual grade laser 1", category:"Instrument", make:"Redback", model:"Dual grade laser", meterType:"none", serviceMonths:"12", notes:"Calibration every 12 months until we confirm the manufacturer interval."},
+ {id:"IN-02", name:"Redback dual grade laser 2", category:"Instrument", make:"Redback", model:"Dual grade laser", meterType:"none", serviceMonths:"12", notes:"Calibration every 12 months until we confirm the manufacturer interval."}
 ].map(a => Object.assign({year:"",serial:"",rego:"",regoDue:"",meter:"",meterDate:"",serviceEvery:"",serviceMonths:"",lastServiceMeter:"",lastServiceDate:"",status:"Active",hire:"No",notes:"",updatedAt:1},a));
 
 /* ---------- Data: cached on this device, shared through assets.json ---------- */
@@ -127,7 +131,7 @@ function assess(a){
   if (a.psm) (STATE.forms||[]).filter(f => f.templateId===a.psm).forEach(f => consider(f.data && f.data.hours_odo, f.data && f.data.inspection_date));
   // last service: the register's baseline, or any logged service
   let lastSvcMeter = num(a.lastServiceMeter), lastSvcDate = a.lastServiceDate || "";
-  logs.filter(f => f.data.mm_kind === "Service").forEach(f => {
+  logs.filter(f => isSvc(f.data.mm_kind)).forEach(f => {
     const m = num(f.data.mm_meter), d = logDate(f);
     if (m!=null && (lastSvcMeter==null || m > lastSvcMeter)) lastSvcMeter = m;
     if (!lastSvcDate || d > lastSvcDate) lastSvcDate = d;
@@ -146,12 +150,12 @@ function assess(a){
   }
   const months = num(a.serviceMonths);
   if (months){
-    if (!lastSvcDate) items.push({key:"calendar", state:"setup", text:"Enter the date of the last service"});
+    if (!lastSvcDate) items.push({key:"calendar", state:"setup", text:"Enter the date of the last " + svcWord(a)});
     else {
       const nd = addMonths(lastSvcDate, months), days = daysUntil(nd);
       const state = days < 0 ? "overdue" : days <= 30 ? "soon" : "ok";
       items.push({key:"calendar", state, nextDate:nd, days,
-        text: days < 0 ? "OVERDUE since " + niceDate(nd) : "Service by " + niceDate(nd) + " (" + days + " day" + (days===1?"":"s") + ")"});
+        text: days < 0 ? "OVERDUE since " + niceDate(nd) : (a.category === "Instrument" ? "Calibration due " : "Service by ") + niceDate(nd) + " (" + days + " day" + (days===1?"":"s") + ")"});
     }
   }
   if (a.regoDue){
@@ -167,7 +171,7 @@ function assess(a){
   else if (latestAfter && /Do not use/.test(latestAfter.data.mm_after)){ use = "out"; useWhy = "Tagged out " + niceDate(logDate(latestAfter)); }
   else if (latestAfter && /Needs attention/.test(latestAfter.data.mm_after)){ use = "attn"; useWhy = "Needs attention (" + niceDate(logDate(latestAfter)) + ")"; }
   const awaiting = logs.filter(needsMechanic);
-  const lastFix = logs.find(f => f.data.mm_kind === "Repair" || f.data.mm_kind === "Service");
+  const lastFix = logs.find(f => f.data.mm_kind === "Repair" || isSvc(f.data.mm_kind));
   const problems = logs.filter(f => f.data.mm_kind === "Problem found" && (!lastFix || logDate(f) > logDate(lastFix) || (logDate(f) === logDate(lastFix) && (f.createdAt||0) > (lastFix.createdAt||0))));
   const lastSigned = logs.find(signedOff);
   return { logs, reading, readingDate, unit:u, lastSvcMeter, lastSvcDate, items, worst, use, useWhy, awaiting, problems, lastSigned };
@@ -191,7 +195,7 @@ TEMPLATES.push({
     {id:"talk", title:"Tell us about it", fields:[
       {id:"mm_what", label:"Tap the microphone and talk: what you did, or what is wrong", type:"textarea", voice:true, voiceHint:"Just talk, like telling a mate. You can fix the words afterwards.", required:true},
       {id:"mm_parts", label:"Parts and fluids used (if any)", type:"text"},
-      {id:"mm_photos", label:"Photos", type:"photos"},
+      {id:"mm_photos", label:"Photos (for a calibration, take a photo of the certificate)", type:"photos"},
       {id:"mm_after", label:"Is it safe to keep using?", type:"select", options:AFTER, affectsVisibility:true},
       {id:"mm_tag_notice", label:"", type:"notice", variant:"danger", html:"<p><strong>Do not use it.</strong> Tag it out, park it where nobody will start it, and tell the Supervisor.</p>", showIf:{field:"mm_after", equals:"Do not use - tag out"}},
       {id:"mm_by", label:"Done by", type:"select", options:USERS}
@@ -280,7 +284,7 @@ window.MCKA = {
         <h4 style="margin:14px 0 4px">Servicing</h4>
         ${row("Service every (hours or km)", inp("serviceEvery","number","e.g. 250"), "Check the manual. Leave blank if it is not serviced by hours or km.")}
         ${row("Reading at the last service", inp("lastServiceMeter","number"))}
-        ${row("Or service every (months)", sel("serviceMonths", ["","6","12","24"]), "For small plant: 6 or 12 months, depending on how hard it works.")}
+        ${row("Or service every (months)", sel("serviceMonths", ["","6","12","24"]), "For small plant: 6 or 12 months, depending on how hard it works. For lasers and other instruments: the calibration interval (usually 12).")}
         ${row("Date of the last service", inp("lastServiceDate","date"))}
         ${row("Status", sel("status", STATUSES), "Choose Sold / disposed to remove it from the pick-lists without losing its history.")}
         ${row("Available for hire?", sel("hire", ["No","Yes"]))}
