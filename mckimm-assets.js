@@ -32,33 +32,33 @@ const NEEDS_SHOW = {field:"mm_kind", includesAny:NEEDS_MECHANIC};
 
 /* ---------- Seed: the machines already in the app. Intervals and readings are left for Al to enter. ---------- */
 const SEED = [
- {id:"EX-01", name:"Komatsu PC200-8", category:"Excavator", make:"Komatsu", model:"PC200-8", meterType:"hours", psm:"MCK-PSM-Komatsu-PC200"},
- {id:"EX-02", name:"Sumitomo SH135X", category:"Excavator", make:"Sumitomo", model:"SH135X", meterType:"hours", psm:"MCK-PSM-Sumatomo-SH135X"},
- {id:"EX-03", name:"Wacker Neuson 38Z3", category:"Excavator", make:"Wacker Neuson", model:"38Z3", meterType:"hours", psm:"MCK-PSM-Wacker-38Z3"},
- {id:"EX-04", name:"Sunward SWE-17", category:"Excavator", make:"Sunward", model:"SWE-17", meterType:"hours", psm:"MCK-PSM-Sunward-SWE17"},
- {id:"GR-01", name:"Mitsubishi MG100 Grader", category:"Grader", make:"Mitsubishi", model:"MG100", meterType:"hours", psm:"MCK-PSM-Mitsubishi-Grader"},
- {id:"RL-01", name:"Wacker Neuson RT82 Roller", category:"Roller", make:"Wacker Neuson", model:"RT82", meterType:"hours", psm:"MCK-PSM-Wacker-RT82"},
- {id:"SS-01", name:"Sunward SWL2810 skid steer", category:"Loader / skid steer", make:"Sunward", model:"SWL2810", meterType:"hours", psm:"MCK-PSM-Skid-Steer", updatedAt:2},
- {id:"EX-05", name:"Sunward SWE50 (5 t excavator)", category:"Excavator", make:"Sunward", model:"SWE50", meterType:"hours", notes:"Kept at the depot."},
- {id:"FK-01", name:"Nissan 1.5 t forklift", category:"Forklift", make:"Nissan", model:"1.5 t", meterType:"hours", notes:"Kept at the depot."},
- {id:"TK-01", name:"Isuzu FSR 500 tipper", category:"Truck", make:"Isuzu", model:"FSR 500", meterType:"km", inspYearly:"Yes"},
- {id:"TK-02", name:"Isuzu FRR 550 hook lift (Merrill bin lifter)", category:"Truck", make:"Isuzu", model:"FRR 550", meterType:"km", inspYearly:"Yes", notes:"Merrill bin lifter body. Used regularly. Yearly roadworthiness inspection (NSW)."},
- {id:"TK-03", name:"Isuzu NPR 400 site truck (bitumen)", category:"Truck", make:"Isuzu", model:"NPR 400", meterType:"km", inspYearly:"Yes", notes:"Bitumen truck. Has a 2 inch water pump on the back (see SP-06)."},
- {id:"SP-01", name:"Red Roo turf cutter", category:"Small plant", make:"Red Roo", model:"", meterType:"none", serviceMonths:"6"},
- {id:"SP-02", name:"Husqvarna road saw (600 mm blade)", category:"Small plant", make:"Husqvarna", model:"Road saw", meterType:"none", serviceMonths:"6", notes:"600 mm blade. Check the blade and guard before each use."},
- {id:"SP-03", name:"8 kVA generator", category:"Small plant", make:"", model:"8 kVA", meterType:"none", serviceMonths:"6"},
- {id:"SP-04", name:"Husqvarna pole saw", category:"Small plant", make:"Husqvarna", model:"Pole saw", meterType:"none", serviceMonths:"6", notes:"Safety check every 6 months, or every 12 if it has not been used. Maintained by the user each day it is used.", updatedAt:2},
- {id:"SP-08", name:"Husqvarna 340 chainsaw", category:"Small plant", make:"Husqvarna", model:"340", meterType:"none", serviceMonths:"6", notes:"Safety check every 6 months, or every 12 if it has not been used. Maintained by the user each day it is used."},
- {id:"SP-09", name:"Husqvarna 562 chainsaw", category:"Small plant", make:"Husqvarna", model:"562", meterType:"none", serviceMonths:"6", notes:"Safety check every 6 months, or every 12 if it has not been used. Maintained by the user each day it is used."},
- {id:"SP-10", name:"Husqvarna 395 chainsaw", category:"Small plant", make:"Husqvarna", model:"395", meterType:"none", serviceMonths:"6", notes:"Safety check every 6 months, or every 12 if it has not been used. Maintained by the user each day it is used."},
- {id:"SP-11", name:"Stihl 880 Magnum chainsaw", category:"Small plant", make:"Stihl", model:"880 Magnum", meterType:"none", serviceMonths:"6", notes:"Safety check every 6 months, or every 12 if it has not been used. Maintained by the user each day it is used."},
- {id:"SP-05", name:"Honda 2 inch pump", category:"Small plant", make:"Honda", model:"2 inch", meterType:"none", serviceMonths:"6"},
- {id:"SP-06", name:"2 inch water pump on the NPR 400", category:"Small plant", make:"", model:"2 inch", meterType:"none", serviceMonths:"6", notes:"Mounted on TK-03."},
- {id:"SP-07", name:"Wacker Neuson jumping jack rammer", category:"Small plant", make:"Wacker Neuson", model:"Rammer", meterType:"none", serviceMonths:"6"},
- {id:"OT-01", name:"Vermeer BC1000XL chipper", category:"Other", make:"Vermeer", model:"BC1000XL", meterType:"hours", notes:"Wood chipper. Check blades, feed rollers and safety stop bar."},
- {id:"IN-01", name:"Redback dual grade laser 1", category:"Instrument", make:"Redback", model:"Dual grade laser", meterType:"none", serviceMonths:"12", notes:"Calibration every 12 months until we confirm the manufacturer interval."},
- {id:"IN-02", name:"Redback dual grade laser 2", category:"Instrument", make:"Redback", model:"Dual grade laser", meterType:"none", serviceMonths:"12", notes:"Calibration every 12 months until we confirm the manufacturer interval."}
-].map(a => Object.assign({year:"",serial:"",rego:"",regoDue:"",meter:"",meterDate:"",serviceEvery:"",serviceMonths:"",lastServiceMeter:"",lastServiceDate:"",inspYearly:"",inspDue:"",status:"Active",hire:"No",notes:"",updatedAt:1},a));
+ {id:"EX-01", name:"Komatsu PC200-8", category:"Excavator", make:"Komatsu", model:"PC200-8", meterType:"hours", psm:"MCK-PSM-Komatsu-PC200", serviceEvery:"500", serviceSource:"Komatsu PC200-8 manual: engine oil and filters every 500 h (hydraulic filter 1,000 h, hydraulic oil 5,000 h). Check against your own manual."},
+ {id:"EX-02", name:"Sumitomo SH135X", category:"Excavator", make:"Sumitomo", model:"SH135X", meterType:"hours", psm:"MCK-PSM-Sumatomo-SH135X", serviceEvery:"250", serviceSource:"Provisional - standard figure, check it against the machine's own manual. Some Sumitomo models allow 500 h."},
+ {id:"EX-03", name:"Wacker Neuson 38Z3", category:"Excavator", make:"Wacker Neuson", model:"38Z3", meterType:"hours", psm:"MCK-PSM-Wacker-38Z3", serviceEvery:"250", serviceSource:"Provisional - standard figure, check it against the machine's own manual."},
+ {id:"EX-04", name:"Sunward SWE-17", category:"Excavator", make:"Sunward", model:"SWE-17", meterType:"hours", psm:"MCK-PSM-Sunward-SWE17", serviceEvery:"250", serviceSource:"Provisional - standard figure, check it against the machine's own manual."},
+ {id:"GR-01", name:"Mitsubishi MG100 Grader", category:"Grader", make:"Mitsubishi", model:"MG100", meterType:"hours", psm:"MCK-PSM-Mitsubishi-Grader", serviceEvery:"250", serviceSource:"Provisional - standard figure, check it against the machine's own manual."},
+ {id:"RL-01", name:"Wacker Neuson RT82 Roller", category:"Roller", make:"Wacker Neuson", model:"RT82", meterType:"hours", psm:"MCK-PSM-Wacker-RT82", serviceEvery:"250", serviceSource:"Provisional - standard figure, check it against the machine's own manual. The RT82 manual also lists hydraulic checks at 100, 500 and 1,000 h."},
+ {id:"SS-01", name:"Sunward SWL2810 skid steer", category:"Loader / skid steer", make:"Sunward", model:"SWL2810", meterType:"hours", psm:"MCK-PSM-Skid-Steer", serviceEvery:"250", serviceSource:"Provisional - standard figure, check it against the machine's own manual."},
+ {id:"EX-05", name:"Sunward SWE50 (5 t excavator)", category:"Excavator", make:"Sunward", model:"SWE50", meterType:"hours", notes:"Kept at the depot.", serviceEvery:"250", serviceSource:"Provisional - standard figure, check it against the machine's own manual."},
+ {id:"FK-01", name:"Nissan 1.5 t forklift", category:"Forklift", make:"Nissan", model:"1.5 t", meterType:"hours", notes:"Kept at the depot.", serviceEvery:"250", serviceSource:"Provisional - standard figure, check it against the machine's own manual."},
+ {id:"TK-01", name:"Isuzu FSR 500 tipper", category:"Truck", make:"Isuzu", model:"FSR 500", meterType:"km", inspYearly:"Yes", serviceEvery:"20000", serviceMonths:"12", serviceSource:"Isuzu F Series service schedule (June 2024): every 20,000 km or 12 months, whichever comes first (250 h if it has an hour meter). Newer models may be 25,000 km."},
+ {id:"TK-02", name:"Isuzu FRR 550 hook lift (Merrill bin lifter)", category:"Truck", make:"Isuzu", model:"FRR 550", meterType:"km", inspYearly:"Yes", notes:"Merrill bin lifter body. Used regularly. Yearly roadworthiness inspection (NSW).", serviceEvery:"20000", serviceMonths:"12", serviceSource:"Isuzu F Series service schedule (June 2024): every 20,000 km or 12 months, whichever comes first (250 h if it has an hour meter). Newer models may be 25,000 km."},
+ {id:"TK-03", name:"Isuzu NPR 400 site truck (bitumen)", category:"Truck", make:"Isuzu", model:"NPR 400", meterType:"km", inspYearly:"Yes", notes:"Bitumen truck. Has a 2 inch water pump on the back (see SP-06).", serviceEvery:"15000", serviceMonths:"12", serviceSource:"Isuzu N Series service schedule (June 2024): every 15,000 km or 12 months, whichever comes first (250 h if it has an hour meter). Provisional for an older NPR 400: check your logbook."},
+ {id:"SP-01", name:"Red Roo turf cutter", category:"Small plant", make:"Red Roo", model:"", meterType:"none", serviceMonths:"6", serviceSource:"Six-monthly safety check, or 12 months if not used."},
+ {id:"SP-02", name:"Husqvarna road saw (600 mm blade)", category:"Small plant", make:"Husqvarna", model:"Road saw", meterType:"none", serviceMonths:"6", notes:"600 mm blade. Check the blade and guard before each use.", serviceSource:"Six-monthly safety check, or 12 months if not used."},
+ {id:"SP-03", name:"8 kVA generator", category:"Small plant", make:"", model:"8 kVA", meterType:"none", serviceMonths:"6", serviceSource:"Six-monthly safety check, or 12 months if not used."},
+ {id:"SP-04", name:"Husqvarna pole saw", category:"Small plant", make:"Husqvarna", model:"Pole saw", meterType:"none", serviceMonths:"6", notes:"Safety check every 6 months, or every 12 if it has not been used. Maintained by the user each day it is used.", serviceSource:"Six-monthly safety check, or 12 months if not used."},
+ {id:"SP-08", name:"Husqvarna 340 chainsaw", category:"Small plant", make:"Husqvarna", model:"340", meterType:"none", serviceMonths:"6", notes:"Safety check every 6 months, or every 12 if it has not been used. Maintained by the user each day it is used.", serviceSource:"Six-monthly safety check, or 12 months if not used."},
+ {id:"SP-09", name:"Husqvarna 562 chainsaw", category:"Small plant", make:"Husqvarna", model:"562", meterType:"none", serviceMonths:"6", notes:"Safety check every 6 months, or every 12 if it has not been used. Maintained by the user each day it is used.", serviceSource:"Six-monthly safety check, or 12 months if not used."},
+ {id:"SP-10", name:"Husqvarna 395 chainsaw", category:"Small plant", make:"Husqvarna", model:"395", meterType:"none", serviceMonths:"6", notes:"Safety check every 6 months, or every 12 if it has not been used. Maintained by the user each day it is used.", serviceSource:"Six-monthly safety check, or 12 months if not used."},
+ {id:"SP-11", name:"Stihl 880 Magnum chainsaw", category:"Small plant", make:"Stihl", model:"880 Magnum", meterType:"none", serviceMonths:"6", notes:"Safety check every 6 months, or every 12 if it has not been used. Maintained by the user each day it is used.", serviceSource:"Six-monthly safety check, or 12 months if not used."},
+ {id:"SP-05", name:"Honda 2 inch pump", category:"Small plant", make:"Honda", model:"2 inch", meterType:"none", serviceMonths:"6", serviceSource:"Six-monthly safety check. Honda pump manual: oil change every 6 months or 100 h."},
+ {id:"SP-06", name:"2 inch water pump on the NPR 400", category:"Small plant", make:"", model:"2 inch", meterType:"none", serviceMonths:"6", notes:"Mounted on TK-03.", serviceSource:"Six-monthly safety check, or 12 months if not used."},
+ {id:"SP-07", name:"Wacker Neuson jumping jack rammer", category:"Small plant", make:"Wacker Neuson", model:"Rammer", meterType:"none", serviceMonths:"6", serviceSource:"Six-monthly safety check, or 12 months if not used."},
+ {id:"OT-01", name:"Vermeer BC1000XL chipper", category:"Other", make:"Vermeer", model:"BC1000XL", meterType:"hours", notes:"Wood chipper. Check blades, feed rollers and safety stop bar.", serviceEvery:"250", serviceSource:"Provisional - standard figure, check it against the machine's own manual."},
+ {id:"IN-01", name:"Redback dual grade laser 1", category:"Instrument", make:"Redback", model:"Dual grade laser", meterType:"none", serviceMonths:"12", notes:"Calibration every 12 months until we confirm the manufacturer interval.", serviceSource:"Provisional - 12 months is the usual calibration interval. Redback manual interval not found."},
+ {id:"IN-02", name:"Redback dual grade laser 2", category:"Instrument", make:"Redback", model:"Dual grade laser", meterType:"none", serviceMonths:"12", notes:"Calibration every 12 months until we confirm the manufacturer interval.", serviceSource:"Provisional - 12 months is the usual calibration interval. Redback manual interval not found."}
+].map(a => Object.assign({year:"",serial:"",rego:"",regoDue:"",meter:"",meterDate:"",serviceEvery:"",serviceMonths:"",lastServiceMeter:"",lastServiceDate:"",inspYearly:"",inspDue:"",serviceSource:"",status:"Active",hire:"No",notes:"",updatedAt:3},a));
 
 /* ---------- Data: cached on this device, shared through assets.json ---------- */
 let DATA = { assets: SEED.map(a=>({...a})), mechanics: [], mechUpdatedAt: 0, dirty:false };
@@ -292,7 +292,7 @@ window.MCKA = {
     closeModal(); MCKA.log(id, kind);
   },
   edit(id){
-    const a = id ? assetById(id) : { id:"", name:"", category:"Excavator", make:"", model:"", year:"", serial:"", rego:"", regoDue:"", meterType:"hours", meter:"", meterDate:"", serviceEvery:"", serviceMonths:"", lastServiceMeter:"", lastServiceDate:"", inspYearly:"", inspDue:"", status:"Active", hire:"No", notes:"" };
+    const a = id ? assetById(id) : { id:"", name:"", category:"Excavator", make:"", model:"", year:"", serial:"", rego:"", regoDue:"", meterType:"hours", meter:"", meterDate:"", serviceEvery:"", serviceMonths:"", lastServiceMeter:"", lastServiceDate:"", inspYearly:"", inspDue:"", serviceSource:"", status:"Active", hire:"No", notes:"" };
     const sel = (key, opts) => `<select id="mcka_${key}">${opts.map(o => `<option ${String(a[key]||"")===o?"selected":""}>${esc(o)}</option>`).join("")}</select>`;
     const inp = (key, type, ph) => `<input id="mcka_${key}" type="${type||"text"}" value="${esc(a[key]||"")}" placeholder="${esc(ph||"")}">`;
     const row = (label, html, hint) => `<div class="field"><label>${esc(label)}</label>${html}${hint?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${hint}</div>`:""}</div>`;
@@ -312,6 +312,7 @@ window.MCKA = {
         ${row("Reading at the last service", inp("lastServiceMeter","number"))}
         ${row("Or service every (months)", sel("serviceMonths", ["","6","12","24"]), "For small plant: 6 or 12 months, depending on how hard it works. For lasers and other instruments: the calibration interval (usually 12).")}
         ${row("Date of the last service", inp("lastServiceDate","date"))}
+        ${row("Where did the interval come from?", inp("serviceSource","text","e.g. Komatsu manual, p.8"), "Start it with the word Provisional if you have not checked it against the manual.")}
         ${row("Status", sel("status", STATUSES), "Choose Sold / disposed to remove it from the pick-lists without losing its history.")}
         ${row("Available for hire?", sel("hire", ["No","Yes"]))}
         ${row("Notes", `<textarea id="mcka_notes" rows="2">${esc(a.notes||"")}</textarea>`)}
@@ -328,7 +329,7 @@ window.MCKA = {
       const used = DATA.assets.filter(x => x.id && x.id.indexOf(p + "-") === 0).map(x => parseInt(x.id.split("-")[1], 10) || 0);
       a.id = p + "-" + String((used.length ? Math.max.apply(null, used) : 0) + 1).padStart(2, "0");
     }
-    ["name","category","make","model","year","serial","rego","regoDue","meterType","meter","serviceEvery","lastServiceMeter","serviceMonths","lastServiceDate","inspYearly","inspDue","status","hire","notes"].forEach(k => { a[k] = g(k); });
+    ["name","category","make","model","year","serial","rego","regoDue","meterType","meter","serviceEvery","lastServiceMeter","serviceMonths","lastServiceDate","inspYearly","inspDue","serviceSource","status","hire","notes"].forEach(k => { a[k] = g(k); });
     if (a.meter) a.meterDate = today();
     touch(a); closeModal(); toast("Saved"); render();
   },
@@ -422,7 +423,7 @@ function renderDetail(m, id){
       ${FIELD ? "" : `<button class="btn" onclick="MCKA.edit('${esc(a.id)}')">✎ Edit</button>`}
     </div>
     ${s ? card(`<h3 style="margin:0 0 6px;font-size:16px">Reading and servicing</h3>
-      <div style="margin-bottom:6px">Reading: <strong>${s.reading != null ? fmtN(s.reading) + " " + s.unit : "none yet"}</strong>${s.readingDate ? ` <span style="color:var(--muted)">(${niceDate(s.readingDate)})</span>` : ""}${s.lastSvcMeter != null || s.lastSvcDate ? ` · last service ${s.lastSvcMeter != null ? fmtN(s.lastSvcMeter) + " " + s.unit : ""}${s.lastSvcDate ? " on " + niceDate(s.lastSvcDate) : ""}` : ""}</div>${sched}`) : ""}
+      <div style="margin-bottom:6px">Reading: <strong>${s.reading != null ? fmtN(s.reading) + " " + s.unit : "none yet"}</strong>${s.readingDate ? ` <span style="color:var(--muted)">(${niceDate(s.readingDate)})</span>` : ""}${a.serviceSource ? ` · <span style="color:var(--muted)">Interval: ${esc(a.serviceSource)}</span>` : ""}${s.lastSvcMeter != null || s.lastSvcDate ? ` · last service ${s.lastSvcMeter != null ? fmtN(s.lastSvcMeter) + " " + s.unit : ""}${s.lastSvcDate ? " on " + niceDate(s.lastSvcDate) : ""}` : ""}</div>${sched}`) : ""}
     ${info.length ? card(`<h3 style="margin:0 0 6px;font-size:16px">Details</h3>${info.map(r => `<div style="display:flex;gap:10px;padding:3px 0"><span style="min-width:120px;color:var(--muted)">${esc(r[0])}</span><span>${esc(r[1])}</span></div>`).join("")}`) : ""}
     ${card(`<h3 style="margin:0 0 8px;font-size:16px">History (${logs.length})</h3>${logs.length ? `<div class="list" style="overflow:auto"><table><thead><tr><th>Date</th><th>Kind</th><th>What</th><th>Reading</th><th>By</th><th>Mechanic</th></tr></thead><tbody>${logs.map(f => `<tr style="cursor:pointer" onclick="MCKA.openForm('${f.id}')"><td>${niceDate(logDate(f))}</td><td>${esc(f.data.mm_kind||"")}</td><td>${esc((f.data.mm_what||"").slice(0,140))}</td><td>${f.data.mm_meter ? esc(fmtN(num(f.data.mm_meter))) : ""}</td><td>${esc(f.data.mm_by||"")}</td><td>${signedOff(f) ? "✓ " + esc(f.data.mm_mech === OTHER_MECH ? (f.data.mm_mech_other||"") : (f.data.mm_mech||"")) : (NEEDS_MECHANIC.indexOf(f.data.mm_kind) >= 0 ? "<span style='color:#b9770e'>waiting</span>" : "")}</td></tr>`).join("")}</tbody></table></div>` : `<span style="color:var(--muted)">No records yet. Tap “Log work” and talk.</span>`}${FIELD ? `<p style="font-size:12px;color:var(--muted);margin:8px 0 0">This phone only shows your own recent records. The full history is on the desktop app.</p>` : ""}`)}
   </div>`;
