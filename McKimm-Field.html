@@ -391,6 +391,7 @@ body{ background:var(--bg); }
   <div class="drawer-link" data-route="register" onclick="nav('register')"><span class="ic">📊</span> Analytics / Register</div>
   <div class="drawer-link" data-route="reminders" onclick="nav('reminders')"><span class="ic">⏰</span> Reminders</div>
   <div class="drawer-link" data-route="compliance" onclick="nav('compliance')"><span class="ic">✅</span> Compliance</div>
+  <div class="drawer-link" data-route="assets" onclick="nav('assets')"><span class="ic">🛠</span> Asset Register</div>
   <div class="drawer-link" data-route="photos" onclick="nav('photos')"><span class="ic">▣</span> Photos</div>
   <div class="drawer-link" data-route="users" onclick="nav('users')"><span class="ic">◍</span> Users</div>
   <div class="drawer-link" data-route="settings" onclick="nav('settings')"><span class="ic">⚙</span> Settings</div>
@@ -408,6 +409,7 @@ body{ background:var(--bg); }
 <script src="mckimm-core.js"></script>
 <script src="mckimm-sops.js"></script>
 <script src="mckimm-projects.js"></script>
+<script src="mckimm-assets.js"></script>
 <script>
 /* ============================================================
    McKimm Field — operator-facing shell.
@@ -451,7 +453,8 @@ function updateTopbar(){
   if (menuBtn) menuBtn.style.display = full ? "" : "none";
   if (!full){
     closeAdminDrawer();
-    if (route.view !== "operatorhome" && route.view !== "form" && route.view !== "projectinfo") nav("operatorhome");
+    const _mayAssets = route.view === "assets" && (fieldTemplatesFor(STATE.currentUser)||[]).includes("MCK-Maint-Log");
+    if (route.view !== "operatorhome" && route.view !== "form" && route.view !== "projectinfo" && !_mayAssets) nav("operatorhome");
   }
 }
 
@@ -550,6 +553,17 @@ function renderOperatorHome(m){
     }
     restrictedTemplates.forEach(tid=>{
       if (tid==="MCK-Daily-Report" || tid==="MCK-Daily-Timesheet" || tid.indexOf("MCK-PSM-")===0) return;
+      if (tid==="MCK-Maint-Log"){
+        cards.push(`
+      <div class="card op-card" style="cursor:default">
+        <div class="row"><div class="icn">🔧</div><span class="status">Talk it in</span></div>
+        <div class="title">Machine maintenance</div>
+        <div class="sub">Fixed something, found a problem, did a service? Tap and talk — it is saved to the machine</div>
+        <button class="btn primary" style="margin-top:10px;width:100%" onclick="MCKA.pick()">🎤 Log work or a problem</button>
+        <button class="btn" style="margin-top:6px;width:100%" onclick="nav('assets')">See the machine list</button>
+      </div>`);
+        return;
+      }
       const t = templateById(tid);
       if (!t) return;
       const prefillJson = esc(JSON.stringify(genericPrefillFor(tid, STATE.fieldProject)));

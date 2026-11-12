@@ -3572,6 +3572,7 @@ function render(){
     case "users":     return m.innerHTML = renderUsers();
     case "settings":  return m.innerHTML = renderSettings();
     case "projectinfo": return window.MCK_RENDER_PROJECTINFO ? MCK_RENDER_PROJECTINFO(m) : (m.innerHTML = "<p>No project profile loaded.</p>");
+    case "assets": return window.MCK_RENDER_ASSETS ? MCK_RENDER_ASSETS(m) : (m.innerHTML = "<p>Asset register not loaded.</p>");
     default: return m.innerHTML = renderDashboard();
   }
 }
@@ -4842,7 +4843,7 @@ function renderField(t, f, fld){
       if (fld.voice) return `<div class="field"><label>${esc(fld.label)}${req}</label>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 6px">
           <button type="button" class="btn primary voice-btn" data-vfield="${fld.id}" onclick="voiceToggle('${fld.id}', this)" style="font-size:16px;padding:10px 16px">🎤 Tap and talk</button>
-          <span class="voice-status" data-vstatus="${fld.id}" style="font-size:13px;color:var(--muted,#64748b)">Talk for a minute about what you did today. You can fix the words afterwards.</span>
+          <span class="voice-status" data-vstatus="${fld.id}" style="font-size:13px;color:var(--muted,#64748b)">${esc(fld.voiceHint||"Talk for a minute about what you did today. You can fix the words afterwards.")}</span>
         </div>
         <textarea data-vtext="${fld.id}" style="min-height:140px" oninput="setField('${fld.id}', this.value)">${esc(v||"")}</textarea></div>`;
       return `<div class="field"><label>${esc(fld.label)}${req}</label>
@@ -4925,6 +4926,8 @@ function renderField(t, f, fld){
     }
     case "locateExpiry":
       return window.MCK_RENDER_LOCATE_EXPIRY ? MCK_RENDER_LOCATE_EXPIRY(f, fld) : "";
+    case "assetInfo":
+      return window.MCK_RENDER_ASSETINFO ? MCK_RENDER_ASSETINFO(f, fld) : "";
     case "notice":
       return `<div class="field"><div class="notice notice-${fld.variant||"warning"}">${fld.html||esc(fld.text||"")}</div></div>`;
     case "sketch": {
@@ -5201,6 +5204,7 @@ function signNow(fid){
   CURRENT_FORM.data[fid] = { dataUrl, by:STATE.currentUser, when:Date.now() };
   CURRENT_FORM.updatedAt = Date.now();
   CURRENT_FORM.activity.push({who:STATE.currentUser, when:Date.now(), what:"Signed "+fid});
+  if (window.MCK_ASSETS && MCK_ASSETS.onSigned){ try { MCK_ASSETS.onSigned(CURRENT_FORM, fid); } catch(e){ console.error(e); } }
   save(); toast("Signed"); render();
 }
 function clearSig(fid){
