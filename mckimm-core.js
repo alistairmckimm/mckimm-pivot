@@ -3572,6 +3572,7 @@ function render(){
     case "users":     return m.innerHTML = renderUsers();
     case "settings":  return m.innerHTML = renderSettings();
     case "projectinfo": return window.MCK_RENDER_PROJECTINFO ? MCK_RENDER_PROJECTINFO(m) : (m.innerHTML = "<p>No project profile loaded.</p>");
+    case "training": return window.MCK_RENDER_TRAINING ? MCK_RENDER_TRAINING(m) : (m.innerHTML = "<p>Training page not loaded.</p>");
     case "assets": return window.MCK_RENDER_ASSETS ? MCK_RENDER_ASSETS(m) : (m.innerHTML = "<p>Asset register not loaded.</p>");
     default: return m.innerHTML = renderDashboard();
   }
