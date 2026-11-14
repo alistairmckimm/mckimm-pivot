@@ -298,6 +298,24 @@ const DAYNAMES = ["sunday","monday","tuesday","wednesday","thursday","friday","s
 const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
 function isoOf(d){ return new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
 
+/* "four thousand five hundred" -> "4500", "truck one" -> "truck 1" (phones sometimes give numbers as words) */
+const NUMW = {zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
+function vfNumWords(t){
+  const toks = t.split(" "), out = [], core = w => w.replace(/[,.]+$/, ""), isNum = w => { w = core(w); return w in NUMW || w === "hundred" || w === "thousand"; };
+  for (let i = 0; i < toks.length;){
+    if (!isNum(toks[i])){ out.push(toks[i++]); continue; }
+    let j = i, big = false;
+    while (j < toks.length && (isNum(toks[j]) || (core(toks[j]) === "and" && j + 1 < toks.length && isNum(toks[j+1]) && big))){ const c = core(toks[j]); if (c === "hundred" || c === "thousand") big = true; j++; if (/[,.]$/.test(toks[j-1])) break; }
+    const run = toks.slice(i, j).map(core).filter(w => w !== "and"), tail = (toks[j-1].match(/[,.]+$/) || [""])[0];
+    const prev = core(out[out.length-1] || "");
+    const wanted = big || run.length >= 2 || /^(truck|tipper|excavator|loader|roller|grader|trailer|laser|number|no|unit|bin)$/.test(prev);
+    if (!wanted){ out.push(...toks.slice(i, j)); i = j; continue; }
+    let total = 0, cur = 0;
+    run.forEach(w => { if (w === "hundred") cur = (cur || 1) * 100; else if (w === "thousand"){ total += (cur || 1) * 1000; cur = 0; } else cur += NUMW[w]; });
+    out.push(String(total + cur) + tail); i = j;
+  }
+  return out.join(" ");
+}
 function vfMatchAsset(t){
   const words = new Set(t.split(/[^a-z0-9]+/).filter(Boolean));
   const compact = t.replace(/[^a-z0-9]+/g,"");
@@ -320,6 +338,8 @@ function vfMatchAsset(t){
     if (cat && cat.length >= 4 && words.has(cat)) score += 1;
     const num = /([a-z]{3,})\s+(\d)\b/.exec(nm);                      // "laser 2", "laser 1"
     if (num && new RegExp("\\b" + num[1] + "\\s+" + num[2] + "\\b").test(t)) score += 3;
+    const idn = /(\d+)$/.exec(a.id); const c1 = normTxt(a.category).split(/[^a-z]+/)[0].replace(/s$/,"");
+    if (idn && c1.length >= 4 && new RegExp("\\b" + c1 + "s?\\s*(?:no|number)?\\s*0*" + (+idn[1]) + "\\b").test(t)) score += 6;   // "truck 1", "excavator number 5"
     if (a.rego && compact.includes(String(a.rego).toLowerCase().replace(/[^a-z0-9]/g,""))) score += 10;
     if (score) scored.push({a, score});
   });
@@ -334,14 +354,18 @@ function vfKind(t){
   if (/\bcalibrat/.test(t)) k.push("Calibration");
   if (/\b(daily check|pre ?start|walk ?around|checked it over|safety check)\b/.test(t)) k.push("Daily check");
   if (/\b(serviced|service|oil change|changed the oil|oil and filter)/.test(t) || /\b(oil|filters?|grease|greased|lubricat)/.test(t)) k.push("Service");
-  const repaired = /\b(repair|repaired|fixed|replaced|rebuilt|welded|re-?sealed|swapped)\b/.test(t);
+  let repaired = /\b(repair|repaired|fixed|rebuilt|welded|re-?sealed)\b/.test(t);
+  if (!repaired){                                   // "replaced / changed / fitted ..." is a repair unless it is only oil, filters or grease
+    const re = /\b(replaced|swapped|changed|fitted|installed|adjusted|tightened|bled)\b((?:\s+\w+){0,3})/g; let m;
+    while ((m = re.exec(t))){ if (!/\b(oil|filters?|grease|greased|lubricat\w*|coolant|fluids?)\b/.test(m[2])){ repaired = true; break; } }
+  }
   if (repaired) k.push("Repair");
   if (!repaired && /\b(problem|fault|issue|noise|leak|leaking|wont start|not working|broken|damaged|cracked|stuck|overheat)/.test(t)) k.push("Problem found");
   return k;
 }
 function vfMeter(t, a){
   if (a && a.meterType === "none") return null;
-  const re = /(\d[\d,]*\.?\d*)\s*(hours|hour|hrs|hr|h|kilometres|kilometers|kms|km|ks)\b(\s+\w+)?/g;
+  const re = /(\d[\d,]*\.?\d*)\s*(hours|hour|hrs|hr|h|kilometres|kilometers|kms|km|ks|kays|k)\b(\s+\w+)?/g;
   let m, best = null;
   while ((m = re.exec(t))){
     const next = (m[3]||"").trim();
@@ -350,16 +374,19 @@ function vfMeter(t, a){
     const ctx = /\b(at|on|reading|clock|meter|showing|reads|now)\s*$/.test(before.trim() + " ") || /\b(at|on|reading|clock|meter|showing|reads|now)\b/.test(before);
     const v = parseFloat(m[1].replace(/,/g,""));
     if (!isFinite(v)) continue;
-    if (!best || (ctx && !best.ctx)) best = { v, ctx, unit: /^(k|ks|kms|km|kilo)/.test(m[2]) ? "Kilometres" : "Hours" };
+    if (!best || (ctx && !best.ctx)) best = { v, ctx, unit: /^(k|ks|kms|km|kilo|kays)/.test(m[2]) ? "Kilometres" : "Hours" };
   }
   if (!best){
-    const m2 = /\b(?:hour meter|meter|odometer|reading|clock)\s*(?:is|was|at|reads|showing|:)?\s*(\d[\d,]*\.?\d*)/.exec(t);
+    const m2 = /\b(?:hour meter|meter|odometer|reading|clock|dial)\s*(?:is|was|at|reads|showing|of|:)?\s*(\d[\d,]*\.?\d*)/.exec(t)
+            || /(\d[\d,]*\.?\d*)\s*(?:on|in)\s+(?:the\s+)?(?:hour meter|meter|odometer|clock|dial|display)\b/.exec(t)
+            || /\b(?:at|showing|reads|reading)\s+(\d[\d,]{2,}\.?\d*)\b/.exec(t);
     if (m2) best = { v: parseFloat(m2[1].replace(/,/g,"")), unit: a && a.meterType === "km" ? "Kilometres" : "Hours" };
   }
   return best && isFinite(best.v) ? best : null;
 }
 function vfDate(t){
   const now = new Date(); now.setHours(0,0,0,0);
+  if (/\b(today|this morning|this arvo|this afternoon|this evening|just now)\b/.test(t)) return isoOf(now);
   if (/\byesterday\b/.test(t)){ const d = new Date(now); d.setDate(d.getDate()-1); return isoOf(d); }
   const dn = new RegExp("\\b(?:last|on)\\s+(" + DAYNAMES.join("|") + ")\\b").exec(t);
   if (dn){ const want = DAYNAMES.indexOf(dn[1]); const d = new Date(now); let back = (d.getDay() - want + 7) % 7; if (back === 0) back = 7; d.setDate(d.getDate() - back); return isoOf(d); }
@@ -381,9 +408,11 @@ function vfAfter(t){
   return "";
 }
 function vfParse(raw){
-  const t = normTxt(raw);
+  const t = vfNumWords(normTxt(raw));
   const am = vfMatchAsset(t);
-  const out = { asset:am.asset, assetWhy:am.why, assetNames:am.names, kind:vfKind(t), meterInfo:vfMeter(t, am.asset), date:vfDate(t), parts:vfParts(raw), after:vfAfter(t) };
+  const cur = (typeof CURRENT_FORM !== "undefined" && CURRENT_FORM && CURRENT_FORM.data && CURRENT_FORM.data.mm_asset) ? assetById(assetIdOf(CURRENT_FORM.data.mm_asset)) : null;
+  const meterAsset = am.asset || cur;
+  const out = { asset:am.asset, assetWhy:am.why, assetNames:am.names, kind:vfKind(t), meterInfo:vfMeter(t, meterAsset), date:vfDate(t), parts:vfParts(raw), after:vfAfter(t), keptAsset:(!am.asset && cur) ? cur : null };
   return out;
 }
 function vfCap(s){ s = String(s||"").trim().replace(/\s+/g," "); return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
@@ -442,14 +471,19 @@ function vfApply(){
   if (!raw){ toast("Say or type what you did first"); return; }
   const p = vfParse(raw), d = CURRENT_FORM.data, done = [], todo = [];
   if (p.asset){ d.mm_asset = lbl(p.asset); done.push("Machine: " + esc(lbl(p.asset))); }
+  else if (p.keptAsset) done.push("Machine: " + esc(lbl(p.keptAsset)) + " (already chosen)");
   else todo.push(p.assetWhy === "several" ? "Not sure which machine (" + esc((p.assetNames||[]).join(", ")) + "?). Pick it from the list." : "Could not tell which machine. Pick it from the list.");
   if (p.kind && p.kind.length){ d.mm_kind = p.kind; done.push("Job: " + esc(p.kind.join(" + "))); } else todo.push("Could not tell the kind of job. Choose it.");
   if (p.meterInfo){ d.mm_meter = String(p.meterInfo.v); d.mm_unit = p.meterInfo.unit; if (p.asset) d.mm_unit_for = p.asset.id; done.push("Reading: " + fmtN(p.meterInfo.v) + (p.meterInfo.unit === "Hours" ? " hours" : " km")); }
+  else { const ma = p.asset || p.keptAsset; if (ma && ma.meterType !== "none") todo.push("No meter reading heard. Type it in the box that says odometer / meter reading."); }
   if (p.date){ d.mm_date = p.date; done.push("Date: " + niceDate(p.date)); }
+  else if (!d.mm_date) todo.push("No date heard. Check the date box.");
   if (p.parts){ d.mm_parts = p.parts; done.push("Parts and fluids: " + esc(p.parts)); }
   if (p.after){ d.mm_after = p.after; done.push("Safe to keep using: " + esc(p.after)); }
-  const said = vfCap(raw), prev = String(d.mm_what || "").trim();
-  if (!prev.includes(said)) d.mm_what = (prev ? prev + " " : "") + (/[.!?]$/.test(said) ? said : said + ".");
+  const said0 = vfCap(raw), said = /[.!?]$/.test(said0) ? said0 : said0 + ".";
+  let prev = String(d.mm_what || "").trim();
+  if (d._vfLast && prev.includes(d._vfLast)) prev = prev.replace(d._vfLast, "").replace(/\s{2,}/g," ").trim();     // fixed the words and tapped Fill again: replace, do not stack
+  d.mm_what = (prev ? prev + " " : "") + said; d._vfLast = said;
   done.push("Your words are in the box below");
   if (/\b(brakes?|steering|hydraulic|hydraulics|lifting|chains?|tyres?|wheels?|boom|structural|cracked|safety)\b/.test(normTxt(raw))) todo.push("You mentioned something safety-related. Answer the safety question yourself: Yes sends it to a qualified mechanic.");
   VF.result = { done, todo };
@@ -533,8 +567,8 @@ TEMPLATES.push({
     {id:"talk", title:"Tell us about it", fields:[
       {id:"mm_what", label:"Tap the microphone and talk: what you did, or what is wrong", type:"textarea", voice:true, voiceHint:"Just talk, like telling a mate. You can fix the words afterwards.", required:true},
       {id:"mm_parts", label:"Parts and fluids used (if any)", type:"text"},
-      {id:"mm_photos", label:"Photos (for a calibration, take a photo of the certificate)", type:"photos"},
-      {id:"mm_attach", label:"Attachments: invoice, report or certificate (PDF or photo, max 3 MB each)", type:"photos", accept:"image/*,application/pdf"},
+      {id:"mm_photos", label:"Photos of the work done (take a few to show what was done and how it looks now; for a calibration, the certificate)", type:"photos"},
+      {id:"mm_attach", label:"Attachments: invoices, reports, or a certificate from a qualified person (PDF or photo, max 3 MB each)", type:"photos", accept:"image/*,application/pdf"},
       {id:"mm_safety", label:"Is there a safety issue, or does the job involve brakes, steering, hydraulics, lifting gear, tyres or wheels, or structure?", type:"select", options:["No","Yes"], affectsVisibility:true, showIf:{field:"mm_kind", includesAny:SAFETY_KINDS}},
       {id:"mm_safety_notice", label:"", type:"notice", variant:"warning", html:"<p><strong>A safety issue needs a qualified mechanic to check and sign it off.</strong> The mechanic section is at the bottom of this form.</p>", showIf:{field:"mm_safety", equals:"Yes"}},
       {id:"mm_after", label:"Is it safe to keep using?", type:"select", options:AFTER, affectsVisibility:true},
@@ -542,7 +576,7 @@ TEMPLATES.push({
       {id:"mm_by", label:"Done by", type:"select", options:USERS}
     ]},
     {id:"comp", title:"Competent person sign-off (routine service)",
-      info:"Routine servicing (oil and filter changes, greasing, general checks) with no safety issue is checked and signed by a competent person from the list under Asset Register › People who sign off. Anything with a safety issue, and any repair, goes to a qualified mechanic instead.",
+      info:"Routine servicing (oil and filter changes, greasing, general checks) with no safety issue is checked and signed by a competent person from the list under Asset Register › People who sign off. Anything with a safety issue, and any repair, goes to a qualified mechanic instead. Take photos of the work done above so there is proof of what was done.",
       fields:[
         {id:"mm_comp_note", label:"Comment (tap the microphone and talk)", type:"textarea", voice:true, voiceHint:"Say what you checked or did.", showIf:SHOW_COMP},
         {id:"mm_comp", label:"Competent person", type:"select", options:COMP_OPTIONS, affectsVisibility:true, showIf:SHOW_COMP},
