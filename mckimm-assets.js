@@ -496,7 +496,7 @@ function vfPanel(f, generic){
   return `<div class="field"><div class="notice notice-info">
     <strong>Talk to fill in ${generic ? "this form" : "the whole form"}</strong><br>${intro}
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0">
-      <button type="button" id="mckvfBtn" class="btn ${VF.active ? "danger" : "primary"}" style="font-size:16px;padding:10px 16px" onclick="MCK_VF.toggle()">${VF.active ? "⏹ Stop and fill in the form" : "🎤 Tap and talk"}</button>
+      <button type="button" id="mckvfBtn" class="btn ${VF.active ? "danger" : "primary"}" style="font-size:${FIELD ? "20px" : "16px"};padding:${FIELD ? "16px 22px" : "10px 16px"}${FIELD ? ";width:100%" : ""}" onclick="MCK_VF.toggle()">${VF.active ? "⏹ Stop and fill in the form" : "🎤 Tap and talk"}</button>
       <button type="button" class="btn" onclick="MCK_VF.apply()">Fill the form from the words below</button>
     </div>
     <div id="mckvfStatus" style="font-size:13px;margin-bottom:6px">You can also type or fix the words, then tap <em>Fill the form</em>.</div>
@@ -506,7 +506,7 @@ function vfPanel(f, generic){
 }
 window.MCK_RENDER_VOICEFILL = function(f){ return vfPanel(f, false); };
 window.MCK_VF_GENERIC = function(t, f){
-  if (FIELD || !t || t.id === "MCK-Maint-Log") return "";
+  if (!t || t.id === "MCK-Maint-Log") return "";
   const has = (t.sections||[]).some(s => (s.fields||[]).some(x => x.type === "textarea" || x.type === "select" || x.type === "chips"));
   return has ? vfPanel(f, true) : "";
 };

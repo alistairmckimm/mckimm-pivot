@@ -3225,16 +3225,18 @@ async function attemptSyncForm(form){
       // server's newer copy instead of re-sending ours.
       Object.assign(form, data.form);
     }
-    delete form._syncPending;
+    delete form._syncPending; form._syncedAt = form.updatedAt || form.createdAt || Date.now();
     return true;
   } catch(e){
     form._syncPending = true;
     return false;
   }
 }
+/* A form needs sending if an earlier send failed, or if it has changed since it was last sent (this also covers every form made before sync was switched on). */
+function needsSync(f){ return !!f._syncPending || (f.updatedAt || f.createdAt || 0) > (f._syncedAt || 0); }
 async function flushPendingSyncs(){
   if (SYNC_IN_FLIGHT || !syncReady()) return;
-  const pending = STATE.forms.filter(f=>f._syncPending);
+  const pending = STATE.forms.filter(needsSync);
   if (!pending.length) return;
   SYNC_IN_FLIGHT = true;
   try {
@@ -3264,11 +3266,12 @@ async function pullSyncedForms(){
     incoming.forEach(serverForm=>{
       const local = STATE.forms.find(f=>f.id===serverForm.id);
       if (!local){
+        serverForm._syncedAt = serverForm.updatedAt || serverForm.createdAt || 0; delete serverForm._syncPending;
         STATE.forms.push(serverForm);
-      } else if (!local._syncPending && (serverForm.updatedAt||0) > (local.updatedAt||0)){
+      } else if (!needsSync(local) && (serverForm.updatedAt||0) > (local.updatedAt||0)){
         // Only overwrite the local copy if the server is strictly newer,
         // so a not-yet-synced local edit never gets clobbered by a pull.
-        Object.assign(local, serverForm);
+        Object.assign(local, serverForm); delete local._syncPending; local._syncedAt = local.updatedAt || 0;
       }
     });
     if (MCKIMM_APP === "field"){
@@ -3279,13 +3282,14 @@ async function pullSyncedForms(){
       STATE.forms = STATE.forms.filter(f=>{
         const isMine = f.createdBy === STATE.currentUser;
         const isOld = (f.createdAt||0) < cutoff;
-        const safeToPrune = !f._syncPending;
+        const safeToPrune = !needsSync(f);
         return !(isMine && isOld && safeToPrune);
       });
     }
-    STATE.lastSyncPull = Date.now();
+    STATE.lastSyncPull = (data.more && data.until) ? data.until : Date.now();
     localStorage.setItem(LS_KEY, JSON.stringify(STATE));
     if (typeof render === "function") render();
+    if (data.more) setTimeout(pullSyncedForms, 500);
   } catch(e){ /* offline or Worker unreachable — the next interval will retry */ }
 }
 
@@ -4645,7 +4649,7 @@ function resetOperatorAccess(userName){
    VIEW: Settings
    ============================================================ */
 function renderSettings(){
-  const pendingSyncCount = STATE.forms.filter(f=>f._syncPending).length;
+  const pendingSyncCount = STATE.forms.filter(needsSync).length;
   const eraseWarning = pendingSyncCount ? (' ' + pendingSyncCount + ' form' + (pendingSyncCount===1?'':'s') + ' have not synced yet and will be lost.') : '';
   return `
     <div class="crumbs"><span>McKimm Civil Pty Ltd</span><span class="sep">›</span><span>Settings</span></div>
@@ -4684,7 +4688,7 @@ function renderSettings(){
         <p style="color:var(--muted);margin:0 0 8px">
           ${syncReady()
             ? `Last synced: ${STATE.lastSyncPull ? fmtDateTime(STATE.lastSyncPull) : "never yet"} · ${pendingSyncCount} form${pendingSyncCount===1?"":"s"} waiting to sync · checks for updates automatically every 15 seconds while this is open${MCKIMM_APP==="field" ? " · showing your last 24 hours only" : " · showing every operator, always"}`
-            : "Add the Photo-analysis proxy URL and App token above to turn on sync."}
+            : "Add the proxy URL and App token above to turn on sync (the same two boxes are used for sync and for the photo analysis)."}
         </p>
         <button class="btn" onclick="pullSyncedForms().then(()=>{flushPendingSyncs();toast('Synced');render();})" ${syncReady()?"":"disabled"}>Sync now</button>
       </div>
@@ -4842,9 +4846,9 @@ function renderField(t, f, fld){
       return `<div class="field"><label>${esc(fld.label)}${req}</label>
         <input type="time" value="${esc(v||"")}" oninput="setField('${fld.id}', this.value)" /></div>`;
     case "textarea":
-      if (fld.voice || MCKIMM_APP !== "field") return `<div class="field"><label>${esc(fld.label)}${req}</label>
+      if (true) return `<div class="field"><label>${esc(fld.label)}${req}</label>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 6px">
-          <button type="button" class="btn primary voice-btn" data-vfield="${fld.id}" onclick="voiceToggle('${fld.id}', this)" style="font-size:16px;padding:10px 16px">🎤 Tap and talk</button>
+          <button type="button" class="btn primary voice-btn" data-vfield="${fld.id}" onclick="voiceToggle('${fld.id}', this)" style="font-size:${MCKIMM_APP==="field"?"20px":"16px"};padding:${MCKIMM_APP==="field"?"16px 22px":"10px 16px"}">🎤 Tap and talk</button>
           <span class="voice-status" data-vstatus="${fld.id}" style="font-size:13px;color:var(--muted,#64748b)">${esc(fld.voiceHint||(fld.voice ? "Talk for a minute about what you did today. You can fix the words afterwards." : "Tap and talk, or type. You can fix the words afterwards."))}</span>
         </div>
         <textarea data-vtext="${fld.id}" style="min-height:140px" oninput="setField('${fld.id}', this.value)">${esc(v||"")}</textarea></div>`;
