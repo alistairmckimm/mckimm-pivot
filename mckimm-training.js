@@ -215,4 +215,85 @@
       </div>
       ${matrixCard()}${libraryCard()}${recordsCard()}</div>`;
   };
+
+  /* ================================================================
+     ISO housekeeping records with periodic reminders
+     These feed the company compliance reminders (Compliance page and the
+     banner on the dashboard): backup monthly, restore test yearly,
+     document register review monthly. See MCK-PRO-01.
+     ================================================================ */
+  const YESNO = ["Yes","No"];
+  const backupLog = {
+    id:"MCK-Backup-Log", name:"Backup Record", category:"ISO Management System", code:"MCK-Backup-Log", version:"v1", icon:"💾",
+    workflow:{ type:"linear", columns:["Recorded"], default:"Recorded" },
+    instructions:"Do this every month, and after each new issue of a document (MCK-PRO-01). Tick only what you actually did and checked.",
+    summary:{ titleField:"bk_drive", subField:"bk_date", tagField:"bk_ok" },
+    prefillDefaults:{ bk_by:"@user", bk_date:"@today" },
+    sections:[
+      {id:"who", title:"Backup details", fields:[
+        {id:"bk_date", label:"Date", type:"date", required:true},
+        {id:"bk_by", label:"Done by", type:"select", options:USERS, required:true},
+        {id:"bk_drive", label:"External drive used", type:"chips", options:["Drive A","Drive B"], required:true},
+        {id:"bk_what", label:"What was done", type:"chips", required:true, options:[
+          "OneDrive master folder is up to date (no sync errors)",
+          "Master ISO folder copied to the external drive",
+          "McKimm Pivot / Field records exported and saved to the master folder",
+          "Snowy Skips Office data exported and saved",
+          "Drive put back in its off-site location"]},
+        {id:"bk_ok", label:"Result", type:"chips", options:["All copies checked","Problem found"], required:true, affectsVisibility:true},
+        {id:"bk_problem", label:"What went wrong, and what you did about it", type:"textarea", showIf:{field:"bk_ok", includes:"Problem found"}},
+        {id:"bk_notes", label:"Notes (optional)", type:"textarea"},
+        {id:"bk_signature", label:"Signature", type:"signature", required:true}
+      ]}
+    ]
+  };
+  const restoreTest = {
+    id:"MCK-Backup-Restore", name:"Backup Restore Test (yearly)", category:"ISO Management System", code:"MCK-Backup-Restore", version:"v1", icon:"🧪",
+    workflow:{ type:"linear", columns:["Recorded"], default:"Recorded" },
+    instructions:"Once a year, restore a few documents and a sample of records from the external drive onto a computer that is not the office laptop, and prove they open and match (MCK-PRO-01, Appendix B).",
+    summary:{ titleField:"rt_drive", subField:"rt_date", tagField:"rt_result" },
+    prefillDefaults:{ rt_by:"@user", rt_date:"@today" },
+    sections:[
+      {id:"who", title:"Restore test", fields:[
+        {id:"rt_date", label:"Date", type:"date", required:true},
+        {id:"rt_by", label:"Done by", type:"select", options:USERS, required:true},
+        {id:"rt_drive", label:"Drive tested", type:"chips", options:["Drive A","Drive B"], required:true},
+        {id:"rt_computer", label:"Computer the files were restored to (not the office laptop)", type:"text", required:true},
+        {id:"rt_docs", label:"Five documents restored, including a signed SOP", type:"chips", options:YESNO, required:true},
+        {id:"rt_records", label:"Five records restored, including a maintenance record", type:"chips", options:YESNO, required:true},
+        {id:"rt_result", label:"Result", type:"chips", options:["All files opened and matched","Problems found"], required:true, affectsVisibility:true},
+        {id:"rt_problem", label:"What failed, and the corrective action raised", type:"textarea", showIf:{field:"rt_result", includes:"Problems found"}},
+        {id:"rt_signature", label:"Signature", type:"signature", required:true}
+      ]}
+    ]
+  };
+  const docReview = {
+    id:"MCK-Doc-Review", name:"Document Register Review (monthly)", category:"ISO Management System", code:"MCK-Doc-Review", version:"v1", icon:"📚",
+    workflow:{ type:"linear", columns:["Recorded"], default:"Recorded" },
+    instructions:"Once a month, open the Document Register (MCK-REG-01). Look for documents past their review date and make sure new or changed documents have reached the apps (MCK-PRO-01).",
+    summary:{ titleField:"dr_date", subField:"dr_by", tagField:"dr_overdue" },
+    prefillDefaults:{ dr_by:"@user", dr_date:"@today" },
+    sections:[
+      {id:"who", title:"Monthly check", fields:[
+        {id:"dr_date", label:"Date", type:"date", required:true},
+        {id:"dr_by", label:"Done by", type:"select", options:USERS, required:true},
+        {id:"dr_overdue", label:"Documents past their review date", type:"chips", options:["None overdue","Some overdue"], required:true, affectsVisibility:true},
+        {id:"dr_table", label:"Overdue documents and what will be done", type:"table", columns:["Document no.","Action","Due date"], showIf:{field:"dr_overdue", includes:"Some overdue"}},
+        {id:"dr_register", label:"Document Register updated and saved in the master folder", type:"chips", options:YESNO, required:true},
+        {id:"dr_published", label:"New or changed documents this month published to McKimm Pivot / Field", type:"chips", options:["Yes","No","Nothing new this month"], required:true},
+        {id:"dr_signature", label:"Signature", type:"signature", required:true}
+      ]}
+    ]
+  };
+  [backupLog, restoreTest, docReview].forEach(t => {
+    const i = TEMPLATES.findIndex(x => x.id === t.id);
+    if (i > -1) TEMPLATES[i] = t; else TEMPLATES.push(t);
+  });
+  if (typeof RECURRING_COMPLIANCE !== "undefined"){
+    [
+      { key:"iso-backup",  templateId:"MCK-Backup-Log",     scope:"company", cadenceDays:30,  label:"Backup: master folder, app records and Snowy Skips Office (monthly)" },
+      { key:"iso-docreview", templateId:"MCK-Doc-Review",   scope:"company", cadenceDays:30,  label:"Document Register review (monthly)" },
+      { key:"iso-restore", templateId:"MCK-Backup-Restore", scope:"company", cadenceDays:365, label:"Backup restore test (yearly)" }
+    ].forEach(it => { if (!RECURRING_COMPLIANCE.some(x => x.key === it.key)) RECURRING_COMPLIANCE.push(it); });
+  }
 })();

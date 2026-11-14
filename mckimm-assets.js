@@ -211,6 +211,17 @@ function assess(a){
   return { logs, reading, readingDate, unit:u, lastSvcMeter, lastSvcDate, items, worst, use, useWhy, awaiting, problems, lastSigned };
 }
 
+/* ---------- The older "Machinery and Vehicle Maintenance Report" listed only the 7 pre-start machines
+   (and showed them as objects). Point its machine list at the full asset register instead. ---------- */
+(function(){
+  const old = TEMPLATES.find(x => x.id === "MCK-Maintenance-Report");
+  if (!old) return;
+  (old.sections || []).forEach(s => (s.fields || []).forEach(f => { if (f.id === "mvm_machine") f.options = ASSET_OPTIONS; }));
+  const first = (old.sections || [])[0];
+  if (first && !first.fields.some(f => f.id === "mvm_note"))
+    first.fields.unshift({ id:"mvm_note", label:"", type:"notice", variant:"info", html:"<p>The machine list is the Asset Register. For a service, repair or problem, the <strong>Maintenance Record</strong> form is better: it updates the service due dates and can be signed off by the mechanic.</p>" });
+})();
+
 /* ---------- Template: the Maintenance Record ---------- */
 TEMPLATES.push({
   id:"MCK-Maint-Log", name:"Maintenance Record", category:"Machinery Maintenance", code:"MCK-Maint-Log", version:"v1", icon:"🔧",
