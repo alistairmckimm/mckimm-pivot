@@ -4876,7 +4876,7 @@ function renderField(t, f, fld){
       return `<div class="field"><label>${esc(fld.label)}${req}</label>
         <div class="photo-strip">
           ${arr.map((p,i)=>`<div class="photo">
-            ${p.startsWith("data:image")?`<img src="${p}" />`:`<span style="font-size:11px;color:var(--muted)">PDF</span>`}
+            ${p.startsWith("data:image")?`<img src="${p}" />`:`<span style="font-size:11px;color:var(--muted);cursor:pointer;display:block;padding:4px;text-align:center;word-break:break-all" title="Open" onclick="openAttachment('${fld.id}',${i})">📄<br>${esc(attachName(p))}</span>`}
             <button class="x" onclick="removePhoto('${fld.id}',${i})">✕</button>
           </div>`).join("")}
           <label class="add-photo" title="Take photo">📷
@@ -5036,7 +5036,8 @@ async function addPhotos(id, files){
         r.onerror = ()=>res(null);
         r.readAsDataURL(file);
       } else {
-        r.onload = ()=>res(r.result);
+        if (file.size > 3*1024*1024){ toast(file.name + " is over 3 MB, so it was not added. Photograph it or send a smaller PDF."); res(null); return; }
+        r.onload = ()=>res(String(r.result).replace(/^data:([^;,]+)/, (m)=>m + ";name=" + encodeURIComponent(file.name)));   // keep the file name inside the data URL
         r.onerror = ()=>res(null);
         r.readAsDataURL(file);
       }
@@ -5044,7 +5045,16 @@ async function addPhotos(id, files){
     if (result) arr.push(result);
   }
   CURRENT_FORM.data[id]=arr; CURRENT_FORM.updatedAt=Date.now(); save(); render();
-  toast("Added "+fileList.length+" photo(s)");
+  toast("Added "+fileList.length+" file(s)");
+}
+function attachName(p){ const m = /^data:[^;,]+;name=([^;,]+)/.exec(p||""); try { return m ? decodeURIComponent(m[1]) : "PDF"; } catch(e){ return "PDF"; } }
+function openAttachment(id, idx){
+  const p = ((CURRENT_FORM && CURRENT_FORM.data[id]) || [])[idx]; if (!p) return;
+  try {
+    const m = /^data:([^;,]+)[^,]*,(.*)$/.exec(p); const bin = atob(m[2]); const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    window.open(URL.createObjectURL(new Blob([u8], { type: m[1] })), "_blank");
+  } catch(e){ toast("Could not open that file"); }
 }
 function removePhoto(id, idx){
   const arr = CURRENT_FORM.data[id]||[];
