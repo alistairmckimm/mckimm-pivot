@@ -141,17 +141,20 @@ function logsFor(a){ return (STATE.forms||[]).filter(f => f.templateId==="MCK-Ma
 function logDate(f){ return (f.data && f.data.mm_date) || new Date(f.createdAt||0).toISOString().slice(0,10); }
 function signedOff(f){ return !!(f.data && f.data.mm_mech_sig && f.data.mm_mech_sig.dataUrl); }
 function needsMechanic(f){ return NEEDS_MECHANIC.indexOf(f.data && f.data.mm_kind) >= 0 && !signedOff(f); }
+/* A record can say "Hours" or "Kilometres". It only moves the service due dates when it matches how the asset is tracked. Older records have no unit and still count. */
+function unitWord(f){ const u = f.data && f.data.mm_unit; return u === "Hours" ? "hours" : u === "Kilometres" ? "km" : ""; }
+function meterOk(f, a){ const w = unitWord(f); return !w || w === a.meterType; }
 function assess(a){
   const logs = logsFor(a).sort((x,y) => logDate(y).localeCompare(logDate(x)) || (y.createdAt||0)-(x.createdAt||0));
   // latest reading: the highest of the register entry, maintenance records and pre-start checks
   let reading = num(a.meter), readingDate = a.meterDate || "";
   const consider = (v, d) => { v = num(v); if (v!=null && (reading==null || v > reading)){ reading = v; readingDate = d || ""; } };
-  logs.forEach(f => consider(f.data.mm_meter, logDate(f)));
+  logs.filter(f => meterOk(f, a)).forEach(f => consider(f.data.mm_meter, logDate(f)));
   if (a.psm) (STATE.forms||[]).filter(f => f.templateId===a.psm).forEach(f => consider(f.data && f.data.hours_odo, f.data && f.data.inspection_date));
   // last service: the register's baseline, or any logged service
   let lastSvcMeter = num(a.lastServiceMeter), lastSvcDate = a.lastServiceDate || "";
   logs.filter(f => isSvc(f.data.mm_kind)).forEach(f => {
-    const m = num(f.data.mm_meter), d = logDate(f);
+    const m = meterOk(f, a) ? num(f.data.mm_meter) : null, d = logDate(f);
     if (m!=null && (lastSvcMeter==null || m > lastSvcMeter)) lastSvcMeter = m;
     if (!lastSvcDate || d > lastSvcDate) lastSvcDate = d;
   });
@@ -283,13 +286,13 @@ function vfMeter(t, a){
     const ctx = /\b(at|on|reading|clock|meter|showing|reads|now)\s*$/.test(before.trim() + " ") || /\b(at|on|reading|clock|meter|showing|reads|now)\b/.test(before);
     const v = parseFloat(m[1].replace(/,/g,""));
     if (!isFinite(v)) continue;
-    if (!best || (ctx && !best.ctx)) best = { v, ctx };
+    if (!best || (ctx && !best.ctx)) best = { v, ctx, unit: /^(k|ks|kms|km|kilo)/.test(m[2]) ? "Kilometres" : "Hours" };
   }
   if (!best){
     const m2 = /\b(?:hour meter|meter|odometer|reading|clock)\s*(?:is|was|at|reads|showing|:)?\s*(\d[\d,]*\.?\d*)/.exec(t);
-    if (m2) best = { v: parseFloat(m2[1].replace(/,/g,"")) };
+    if (m2) best = { v: parseFloat(m2[1].replace(/,/g,"")), unit: a && a.meterType === "km" ? "Kilometres" : "Hours" };
   }
-  return best && isFinite(best.v) ? best.v : null;
+  return best && isFinite(best.v) ? best : null;
 }
 function vfDate(t){
   const now = new Date(); now.setHours(0,0,0,0);
@@ -316,7 +319,7 @@ function vfAfter(t){
 function vfParse(raw){
   const t = normTxt(raw);
   const am = vfMatchAsset(t);
-  const out = { asset:am.asset, assetWhy:am.why, assetNames:am.names, kind:vfKind(t), meter:vfMeter(t, am.asset), date:vfDate(t), parts:vfParts(raw), after:vfAfter(t) };
+  const out = { asset:am.asset, assetWhy:am.why, assetNames:am.names, kind:vfKind(t), meterInfo:vfMeter(t, am.asset), date:vfDate(t), parts:vfParts(raw), after:vfAfter(t) };
   return out;
 }
 function vfCap(s){ s = String(s||"").trim().replace(/\s+/g," "); return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
@@ -354,7 +357,7 @@ function gvApply(){
     if (df){ d[df.id] = dt; done.push(esc(label(df)) + ": " + niceDate(dt)); }
   }
   const mf = (t.sections||[]).flatMap(s => s.fields||[]).find(x => x.type === "number" && /hour|km|reading|meter|odometer/i.test(x.label || "") && fieldVisible(f, x));
-  if (mf){ const mv = vfMeter(normTxt(raw), null); if (mv != null){ d[mf.id] = String(mv); done.push(esc(label(mf)) + ": " + fmtN(mv)); } }
+  if (mf){ const mv = vfMeter(normTxt(raw), null); if (mv){ d[mf.id] = String(mv.v); done.push(esc(label(mf)) + ": " + fmtN(mv.v)); } }
   const notes = (t.sections||[]).flatMap(s => s.fields||[]).filter(x => x.type === "textarea" && fieldVisible(f, x));
   const nf = notes.find(x => x.voice) || notes[0];
   const todo = [];
@@ -377,7 +380,7 @@ function vfApply(){
   if (p.asset){ d.mm_asset = lbl(p.asset); done.push("Machine: " + esc(lbl(p.asset))); }
   else todo.push(p.assetWhy === "several" ? "Not sure which machine (" + esc((p.assetNames||[]).join(", ")) + "?). Pick it from the list." : "Could not tell which machine. Pick it from the list.");
   if (p.kind){ d.mm_kind = p.kind; done.push("Job: " + esc(p.kind)); } else todo.push("Could not tell the kind of job. Choose it.");
-  if (p.meter != null){ d.mm_meter = String(p.meter); done.push("Meter: " + fmtN(p.meter) + (p.asset ? " " + unitOf(p.asset) : "")); }
+  if (p.meterInfo){ d.mm_meter = String(p.meterInfo.v); d.mm_unit = p.meterInfo.unit; if (p.asset) d.mm_unit_for = p.asset.id; done.push("Reading: " + fmtN(p.meterInfo.v) + (p.meterInfo.unit === "Hours" ? " hours" : " km")); }
   if (p.date){ d.mm_date = p.date; done.push("Date: " + niceDate(p.date)); }
   if (p.parts){ d.mm_parts = p.parts; done.push("Parts and fluids: " + esc(p.parts)); }
   if (p.after){ d.mm_after = p.after; done.push("Safe to keep using: " + esc(p.after)); }
@@ -465,7 +468,8 @@ TEMPLATES.push({
       {id:"mm_asset", label:"Machine, truck or tool", type:"select", options:ASSET_OPTIONS, required:true, affectsVisibility:true},
       {id:"mm_info", label:"", type:"assetInfo"},
       {id:"mm_kind", label:"What kind of job is it?", type:"select", options:KINDS, required:true, affectsVisibility:true},
-      {id:"mm_meter", label:"Hours or km on the machine now (from the meter)", type:"number"},
+      {id:"mm_unit", label:"Reading is in", type:"select", options:["Hours","Kilometres"], affectsVisibility:true},
+      {id:"mm_meter", label:"Odometer / meter reading now", type:"number"},
       {id:"mm_date", label:"Date", type:"date", required:true}
     ]},
     {id:"talk", title:"Tell us about it", fields:[
@@ -490,11 +494,13 @@ TEMPLATES.push({
 /* Work out what a field of type "assetInfo" shows */
 window.MCK_RENDER_ASSETINFO = function(f, fld){
   const a = assetById(assetIdOf(f.data.mm_asset));
+  if (a && f.data.mm_unit_for !== a.id){ f.data.mm_unit_for = a.id; if (a.meterType === "km") f.data.mm_unit = "Kilometres"; else if (a.meterType === "hours") f.data.mm_unit = "Hours"; }
   if (!a) return `<div class="field"><div class="notice notice-info">Pick the machine, truck or tool. If it is not in the list, choose <em>Other / not listed</em> and say what it is in the box below.</div></div>`;
   const s = assess(a), parts = [];
   if (s.reading != null) parts.push("Last reading <strong>" + fmtN(s.reading) + " " + s.unit + "</strong>" + (s.readingDate ? " (" + niceDate(s.readingDate) + ")" : ""));
   if (!FIELD){ s.items.filter(i => ["rego","inspection","ppsr"].indexOf(i.key) < 0).forEach(i => parts.push(i.text)); }
   if (s.use === "out") parts.push("<strong>" + esc(s.useWhy) + "</strong>");
+  if (f.data.mm_unit && !meterOk(f, a) && a.meterType !== "none") parts.push("<strong>This one is tracked in " + (a.meterType === "km" ? "kilometres" : "hours") + ". A reading in " + (f.data.mm_unit === "Hours" ? "hours" : "kilometres") + " is saved on the record but will not move the service dates.</strong>");
   const bad = s.use === "out" || s.worst === "overdue";
   return `<div class="field"><div class="notice notice-${bad ? "danger" : "info"}"><strong>${esc(a.name)}</strong>${a.rego ? " · " + esc(a.rego) : ""}<br>${parts.join(" · ") || "No reading in the register yet. Enter the hours or km from the meter below."}</div></div>`;
 };
@@ -684,7 +690,7 @@ function renderDetail(m, id){
     ${s ? card(`<h3 style="margin:0 0 6px;font-size:16px">Reading and servicing</h3>
       <div style="margin-bottom:6px">Reading: <strong>${s.reading != null ? fmtN(s.reading) + " " + s.unit : "none yet"}</strong>${s.readingDate ? ` <span style="color:var(--muted)">(${niceDate(s.readingDate)})</span>` : ""}${a.serviceSource ? ` · <span style="color:var(--muted)">Interval: ${esc(a.serviceSource)}</span>` : ""}${s.lastSvcMeter != null || s.lastSvcDate ? ` · last service ${s.lastSvcMeter != null ? fmtN(s.lastSvcMeter) + " " + s.unit : ""}${s.lastSvcDate ? " on " + niceDate(s.lastSvcDate) : ""}` : ""}</div>${sched}`) : ""}
     ${info.length ? card(`<h3 style="margin:0 0 6px;font-size:16px">Details</h3>${info.map(r => `<div style="display:flex;gap:10px;padding:3px 0"><span style="min-width:120px;color:var(--muted)">${esc(r[0])}</span><span>${esc(r[1])}</span></div>`).join("")}`) : ""}
-    ${card(`<h3 style="margin:0 0 8px;font-size:16px">History (${logs.length})</h3>${logs.length ? `<div class="list" style="overflow:auto"><table><thead><tr><th>Date</th><th>Kind</th><th>What</th><th>Reading</th><th>By</th><th>Mechanic</th></tr></thead><tbody>${logs.map(f => `<tr style="cursor:pointer" onclick="MCKA.openForm('${f.id}')"><td>${niceDate(logDate(f))}</td><td>${esc(f.data.mm_kind||"")}</td><td>${esc((f.data.mm_what||"").slice(0,140))}</td><td>${f.data.mm_meter ? esc(fmtN(num(f.data.mm_meter))) : ""}</td><td>${esc(f.data.mm_by||"")}</td><td>${signedOff(f) ? "✓ " + esc(f.data.mm_mech === OTHER_MECH ? (f.data.mm_mech_other||"") : (f.data.mm_mech||"")) : (NEEDS_MECHANIC.indexOf(f.data.mm_kind) >= 0 ? "<span style='color:#b9770e'>waiting</span>" : "")}</td></tr>`).join("")}</tbody></table></div>` : `<span style="color:var(--muted)">No records yet. Tap “Log work” and talk.</span>`}${FIELD ? `<p style="font-size:12px;color:var(--muted);margin:8px 0 0">This phone only shows your own recent records. The full history is on the desktop app.</p>` : ""}`)}
+    ${card(`<h3 style="margin:0 0 8px;font-size:16px">History (${logs.length})</h3>${logs.length ? `<div class="list" style="overflow:auto"><table><thead><tr><th>Date</th><th>Kind</th><th>What</th><th>Reading</th><th>By</th><th>Mechanic</th></tr></thead><tbody>${logs.map(f => `<tr style="cursor:pointer" onclick="MCKA.openForm('${f.id}')"><td>${niceDate(logDate(f))}</td><td>${esc(f.data.mm_kind||"")}</td><td>${esc((f.data.mm_what||"").slice(0,140))}</td><td>${f.data.mm_meter ? esc(fmtN(num(f.data.mm_meter))) + (f.data.mm_unit ? " " + (f.data.mm_unit === "Hours" ? "h" : "km") : "") : ""}</td><td>${esc(f.data.mm_by||"")}</td><td>${signedOff(f) ? "✓ " + esc(f.data.mm_mech === OTHER_MECH ? (f.data.mm_mech_other||"") : (f.data.mm_mech||"")) : (NEEDS_MECHANIC.indexOf(f.data.mm_kind) >= 0 ? "<span style='color:#b9770e'>waiting</span>" : "")}</td></tr>`).join("")}</tbody></table></div>` : `<span style="color:var(--muted)">No records yet. Tap “Log work” and talk.</span>`}${FIELD ? `<p style="font-size:12px;color:var(--muted);margin:8px 0 0">This phone only shows your own recent records. The full history is on the desktop app.</p>` : ""}`)}
   </div>`;
 }
 
