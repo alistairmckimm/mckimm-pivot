@@ -653,12 +653,34 @@ window.MCKA = {
     startForm("MCK-Maint-Log", prefill);
   },
   pick(){
-    const opts = DATA.assets.filter(a => a.status !== "Sold / disposed").sort((a,b)=>a.id.localeCompare(b.id)).map(a => `<option value="${esc(a.id)}">${esc(lbl(a))}</option>`).join("");
+    const live = DATA.assets.filter(a => a.status !== "Sold / disposed");
+    const small = a => /small plant|instrument|hand|tool/i.test(a.category || "");
+    const now = Date.now(), D90 = 90*86400000;
+    const useScore = a => {                                       // how much this one gets used: maintenance records, and pre-starts in the last 90 days
+      const logs = logsFor(a); let sc = logs.length * 2;
+      logs.forEach(f => { if (now - (f.createdAt||0) < 30*86400000) sc += 3; });
+      if (a.psm) sc += (STATE.forms||[]).filter(f => f.templateId === a.psm && now - (f.createdAt||0) < D90).length;
+      return sc;
+    };
+    const rank = a => a.category === "Truck" ? 0 : /excavator|loader|grader|roller/i.test(a.category||"") ? 1 : 2;     // when there is no history yet: trucks, then the big machines
+    const big = live.filter(a => !small(a)).map(a => ({a, sc:useScore(a)})).sort((x,y) => (y.sc - x.sc) || (rank(x.a) - rank(y.a)) || x.a.id.localeCompare(y.a.id));
+    const top = big.slice(0, 6).map(x => x.a), topIds = new Set(top.map(a => a.id));
+    const opt = a => `<option value="${esc(a.id)}">${esc(lbl(a))}</option>`;
+    const rest = big.map(x => x.a).filter(a => !topIds.has(a.id)), smalls = live.filter(small).sort((a,b) => a.id.localeCompare(b.id));
+    const opts = `<optgroup label="Most used">${top.map(opt).join("")}</optgroup>`
+      + (rest.length ? `<optgroup label="Other machines and trucks">${rest.map(opt).join("")}</optgroup>` : "")
+      + (smalls.length ? `<optgroup label="Small plant and tools">${smalls.map(opt).join("")}</optgroup>` : "");
+    const btn = a => `<button type="button" class="btn" style="width:100%;text-align:left;padding:${FIELD ? "16px 14px" : "10px 12px"};font-size:${FIELD ? "17px" : "14px"};margin-bottom:6px" onclick="MCKA.pickQuick('${esc(a.id)}')">${esc(lbl(a))}</button>`;
     showModal("Log work or report a problem",
-      `<div class="field"><label>Which machine, truck or tool?</label><select id="mckaPickAsset"><option value="">Select...</option>${opts}</select></div>
-       <div class="field"><label>What is it?</label><select id="mckaPickKind"><option value="">Select...</option>${KINDS.map(k => `<option>${esc(k)}</option>`).join("")}</select></div>
+      `<div class="field"><label>Tap the machine or truck</label>${top.map(btn).join("")}</div>
+       <div class="field"><label>Or choose any other machine, truck or tool</label><select id="mckaPickAsset" style="${FIELD ? "font-size:17px;padding:12px" : ""}"><option value="">Select...</option>${opts}</select></div>
+       <div class="field"><label>What is it? (you can tick more than one on the next screen)</label><select id="mckaPickKind"><option value="">Choose on the next screen</option>${KINDS.map(k => `<option>${esc(k)}</option>`).join("")}</select></div>
        <p style="color:var(--muted);font-size:13px;margin:6px 0 0">Next you tap the microphone and talk.</p>`,
       `<button class="btn" onclick="closeModal()">Cancel</button> <button class="btn primary" onclick="MCKA.pickGo()">Start</button>`);
+  },
+  pickQuick(id){
+    const k = document.getElementById("mckaPickKind"); const kind = k ? k.value : "";
+    closeModal(); MCKA.log(id, kind);
   },
   pickGo(){
     const id = document.getElementById("mckaPickAsset").value, kind = document.getElementById("mckaPickKind").value;
