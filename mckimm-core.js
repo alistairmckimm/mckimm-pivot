@@ -5195,6 +5195,9 @@ function signNow(fid){
     const _n = (Array.isArray(CURRENT_FORM.data[_def.requiresPhotos.field])?CURRENT_FORM.data[_def.requiresPhotos.field]:[]).filter(p=>typeof p==="string" && p.startsWith("data:image")).length;
     if (_n < _def.requiresPhotos.min){ toast("Add at least "+_def.requiresPhotos.min+" photos of today's work first ("+_n+" so far)"); return; }
   }
+  if (_def && _def.requiresFields){
+    for (const _r of _def.requiresFields){ if (!String(CURRENT_FORM.data[_r.field]||"").trim()){ toast(_r.message); return; } }
+  }
   if (_def && _def.requiresText){
     const _tf = _def.requiresText, _txt = String(CURRENT_FORM.data[_tf.field]||"").trim();
     if (_txt.length < (_tf.minChars||20)){ toast(_tf.message || "Add a short summary of what you did today first (tap the microphone and talk)"); return; }

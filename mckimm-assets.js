@@ -22,13 +22,20 @@ const FIELD = (typeof MCKIMM_APP !== "undefined" && MCKIMM_APP === "field");
 const CATS = ["Excavator","Loader / skid steer","Grader","Roller","Truck","Forklift","Ute / vehicle","Trailer","Small plant","Instrument","Attachment","Other"];
 const PREFIX = {"Excavator":"EX","Loader / skid steer":"SS","Grader":"GR","Roller":"RL","Truck":"TK","Forklift":"FK","Ute / vehicle":"UT","Trailer":"TR","Small plant":"SP","Instrument":"IN","Attachment":"AT","Other":"OT"};
 const STATUSES = ["Active","Out of service","Hired out","Sold / disposed"];
-const KINDS = ["Service","Calibration","Repair","Problem found","Daily check","Other"];
-const NEEDS_MECHANIC = ["Service","Repair","Other"];   // (a calibration is backed by the lab certificate photo, not a mechanic)
+const HVIS_KIND = "Heavy vehicle inspection (HVIS)";
+const KINDS = ["Service","Calibration","Repair","Problem found","Daily check",HVIS_KIND,"Other"];
+/* Who signs what:
+   routine service (oil, filters, grease, checks) .... a competent person (listed with the basis for their competence)
+   anything with a safety issue, any repair ........... a qualified mechanic
+   heavy vehicle inspection ........................... the HVIS inspector
+   calibration (lab certificate photo) and daily checks with no safety issue need no signature */
+const SAFETY_KINDS = ["Service","Repair","Problem found","Daily check","Other"];
 const isSvc = k => k === "Service" || k === "Calibration";
 const svcWord = a => a.category === "Instrument" ? "calibration" : "service";   // work the crew did: a qualified mechanic signs these
 const AFTER = ["Safe to use","Needs attention soon","Do not use - tag out"];
 const OTHER_MECH = "Other (type name below)";
-const NEEDS_SHOW = {field:"mm_kind", includesAny:NEEDS_MECHANIC};
+const OTHER_COMP = "Other (type name below)", OTHER_INSP = "Other (type name below)";
+const SHOW_COMP = {field:"mm_level", equals:"competent"}, SHOW_MECH = {field:"mm_level", equals:"mechanic"}, SHOW_HVIS = {field:"mm_level", equals:"hvis"};
 
 /* ---------- Seed: the machines already in the app. Intervals and readings are left for Al to enter. ---------- */
 const SEED = [
@@ -63,13 +70,22 @@ const SEED = [
 ].map(a => Object.assign({year:"",serial:"",rego:"",regoDue:"",meter:"",meterDate:"",serviceEvery:"",serviceMonths:"",lastServiceMeter:"",lastServiceDate:"",inspYearly:"",inspDue:"",serviceSource:"",lender:"",ownerProof:"",ppsrSearchDate:"",ppsrResult:"",ppsrRegNo:"",ppsrExpiry:"",status:"Active",hire:"No",notes:"",updatedAt:3},a));
 
 /* ---------- Data: cached on this device, shared through assets.json ---------- */
-let DATA = { assets: SEED.map(a=>({...a})), mechanics: [], mechUpdatedAt: 0, dirty:false };
+let DATA = { assets: SEED.map(a=>({...a})), mechanics: [], competent: [], inspectors: [], competentBasis: {}, mechUpdatedAt: 0, dirty:false };
 try {
   const c = JSON.parse(localStorage.getItem(LS_KEY_ASSETS) || "null");
   if (c && Array.isArray(c.assets) && c.assets.length) DATA = Object.assign(DATA, c);
 } catch(e){}
+/* First time on this device: the people Al named. All editable under Asset Register > People who sign off. */
+if (!DATA.peopleSeeded){
+  DATA.competent = DATA.competent || []; DATA.inspectors = DATA.inspectors || []; DATA.competentBasis = DATA.competentBasis || {};
+  if (!DATA.mechanics.length) DATA.mechanics.push("Simon Story");
+  if (!DATA.competent.length){ DATA.competent.push("Alistair McKimm", "William Westaway"); DATA.competentBasis["Alistair McKimm"] = DATA.competentBasis["William Westaway"] = "Routine servicing (oil, filters, grease, checks): decades of experience, with mechanics"; }
+  if (!DATA.inspectors.length) DATA.inspectors.push("Tobias Gordon (HVIS inspector)");
+  DATA.peopleSeeded = true; persist0();
+}
+function persist0(){ try { localStorage.setItem(LS_KEY_ASSETS, JSON.stringify(DATA)); } catch(e){} }
 const ASSET_OPTIONS = [];
-const MECH_OPTIONS = [];
+const MECH_OPTIONS = [], COMP_OPTIONS = [], INSP_OPTIONS = [];
 function lbl(a){ return a.id + " · " + a.name; }
 function assetIdOf(label){ return label ? String(label).split(" · ")[0] : ""; }
 function assetById(id){ return DATA.assets.find(a=>a.id===id); }
@@ -80,6 +96,8 @@ function refreshOptions(){
   MECH_OPTIONS.length = 0;
   DATA.mechanics.forEach(m=>MECH_OPTIONS.push(m));
   MECH_OPTIONS.push(OTHER_MECH);
+  COMP_OPTIONS.length = 0; (DATA.competent||[]).forEach(m=>COMP_OPTIONS.push(m)); COMP_OPTIONS.push(OTHER_COMP);
+  INSP_OPTIONS.length = 0; (DATA.inspectors||[]).forEach(m=>INSP_OPTIONS.push(m)); INSP_OPTIONS.push(OTHER_INSP);
 }
 function persist(){ try { localStorage.setItem(LS_KEY_ASSETS, JSON.stringify(DATA)); } catch(e){} }
 refreshOptions();
@@ -91,7 +109,7 @@ function merge(remote){
     if (!l) DATA.assets.push(r);
     else if ((r.updatedAt||0) > (l.updatedAt||0)) Object.assign(l, r);
   });
-  if ((remote.mechUpdatedAt||0) > (DATA.mechUpdatedAt||0)){ DATA.mechanics = (remote.mechanics||[]).slice(); DATA.mechUpdatedAt = remote.mechUpdatedAt; }
+  if ((remote.mechUpdatedAt||0) > (DATA.mechUpdatedAt||0)){ DATA.mechanics = (remote.mechanics||[]).slice(); DATA.competent = (remote.competent||DATA.competent||[]).slice(); DATA.inspectors = (remote.inspectors||DATA.inspectors||[]).slice(); DATA.competentBasis = Object.assign({}, remote.competentBasis||DATA.competentBasis||{}); DATA.mechUpdatedAt = remote.mechUpdatedAt; }
 }
 async function loadRemote(){
   try {
@@ -113,7 +131,7 @@ async function publish(quiet){
       const cur = await getRes.json(); sha = cur.sha;
       try { merge(JSON.parse(decodeURIComponent(escape(atob((cur.content||"").replace(/\n/g,"")))))); } catch(e){}
     } else if (getRes.status !== 404){ if (!quiet) toast("Could not share the list (" + getRes.status + ")"); return false; }
-    const json = JSON.stringify({ assets: DATA.assets, mechanics: DATA.mechanics, mechUpdatedAt: DATA.mechUpdatedAt }, null, 1);
+    const json = JSON.stringify({ assets: DATA.assets, mechanics: DATA.mechanics, competent: DATA.competent, inspectors: DATA.inspectors, competentBasis: DATA.competentBasis, mechUpdatedAt: DATA.mechUpdatedAt }, null, 1);
     const body = { message:"Update asset register", content: btoa(unescape(encodeURIComponent(json))) };
     if (sha) body.sha = sha;
     const put = await fetch(`https://api.github.com/repos/${REPO}/contents/${path}`, { method:"PUT", headers:{ Authorization:`Bearer ${token}`, Accept:"application/vnd.github+json", "Content-Type":"application/json" }, body: JSON.stringify(body) });
@@ -139,8 +157,35 @@ function unitOf(a){ return a.meterType === "km" ? "km" : a.meterType === "hours"
 /* ---------- Work out where an asset is at ---------- */
 function logsFor(a){ return (STATE.forms||[]).filter(f => f.templateId==="MCK-Maint-Log" && assetIdOf(f.data && f.data.mm_asset) === a.id); }
 function logDate(f){ return (f.data && f.data.mm_date) || new Date(f.createdAt||0).toISOString().slice(0,10); }
-function signedOff(f){ return !!(f.data && f.data.mm_mech_sig && f.data.mm_mech_sig.dataUrl); }
-function needsMechanic(f){ return NEEDS_MECHANIC.indexOf(f.data && f.data.mm_kind) >= 0 && !signedOff(f); }
+const hasSig = (f, k) => !!(f.data && f.data[k] && f.data[k].dataUrl);
+function levelOf(f){
+  const d = (f && f.data) || {}, k = d.mm_kind;
+  if (!k) return "";
+  if (k === HVIS_KIND) return "hvis";
+  if (k === "Calibration") return "";
+  const safety = d.mm_safety === "Yes" || d.mm_after === "Needs attention soon" || d.mm_after === "Do not use - tag out";
+  let lv = "";
+  if (k === "Repair" || k === "Other" || safety) lv = "mechanic";
+  else if (k === "Service") lv = "competent";
+  if (lv === "competent" && hasSig(f, "mm_mech_sig") && !hasSig(f, "mm_comp_sig")) lv = "mechanic";   // older records a mechanic already signed
+  return lv;
+}
+function sigOk(f){
+  const lv = levelOf(f);
+  if (lv === "mechanic") return hasSig(f, "mm_mech_sig");
+  if (lv === "competent") return hasSig(f, "mm_comp_sig") || hasSig(f, "mm_mech_sig");
+  if (lv === "hvis") return hasSig(f, "mm_hvis_sig");
+  return true;
+}
+function signedOff(f){ return hasSig(f, "mm_mech_sig") || hasSig(f, "mm_comp_sig") || hasSig(f, "mm_hvis_sig"); }
+function needsMechanic(f){ return !!levelOf(f) && !sigOk(f); }       // (name kept: means "still waiting for its sign-off")
+function signerName(f){
+  const d = f.data || {};
+  if (hasSig(f, "mm_hvis_sig")) return d.mm_hvis === OTHER_INSP ? (d.mm_hvis_other || "") : (d.mm_hvis || "");
+  if (hasSig(f, "mm_mech_sig")) return d.mm_mech === OTHER_MECH ? (d.mm_mech_other || "") : (d.mm_mech || "");
+  if (hasSig(f, "mm_comp_sig")) return d.mm_comp === OTHER_COMP ? (d.mm_comp_other || "") : (d.mm_comp || "");
+  return "";
+}
 /* A record can say "Hours" or "Kilometres". It only moves the service due dates when it matches how the asset is tracked. Older records have no unit and still count. */
 function unitWord(f){ const u = f.data && f.data.mm_unit; return u === "Hours" ? "hours" : u === "Kilometres" ? "km" : ""; }
 function meterOk(f, a){ const w = unitWord(f); return !w || w === a.meterType; }
@@ -184,11 +229,14 @@ function assess(a){
     const days = daysUntil(a.regoDue), state = days < 0 ? "overdue" : days <= 30 ? "soon" : "ok";
     items.push({key:"rego", state, days, text: days < 0 ? "Rego EXPIRED " + niceDate(a.regoDue) : "Rego due " + niceDate(a.regoDue)});
   }
+  let inspDue = a.inspDue;
+  const hv = logs.find(f => f.data.mm_kind === HVIS_KIND && sigOk(f));
+  if (hv){ const nd = addMonths(logDate(hv), 12); if (!inspDue || nd > inspDue) inspDue = nd; }
   if (a.inspYearly === "Yes"){
-    if (!a.inspDue) items.push({key:"inspection", state:"setup", text:"Enter the date the yearly roadworthiness inspection is due"});
+    if (!inspDue) items.push({key:"inspection", state:"setup", text:"Enter the date the yearly roadworthiness inspection is due"});
     else {
-      const days = daysUntil(a.inspDue), state = days < 0 ? "overdue" : days <= 30 ? "soon" : "ok";
-      items.push({key:"inspection", state, days, text: days < 0 ? "Yearly inspection OVERDUE since " + niceDate(a.inspDue) : "Yearly inspection due " + niceDate(a.inspDue) + " (" + days + " day" + (days===1?"":"s") + ")"});
+      const days = daysUntil(inspDue), state = days < 0 ? "overdue" : days <= 30 ? "soon" : "ok";
+      items.push({key:"inspection", state, days, text: days < 0 ? "Yearly inspection OVERDUE since " + niceDate(inspDue) : "Yearly inspection due " + niceDate(inspDue) + " (" + days + " day" + (days===1?"":"s") + ")"});
     }
   }
   // PPSR: ownership search, and registration for anything that goes out on hire
@@ -267,6 +315,7 @@ function vfMatchAsset(t){
   return { asset:scored[0].a, why:"ok" };
 }
 function vfKind(t){
+  if (/\b(hvis|heavy vehicle inspection|roadworthiness|annual inspection)\b/.test(t)) return HVIS_KIND;
   if (/\bcalibrat/.test(t)) return "Calibration";
   if (/\b(daily check|pre ?start|walk ?around|checked it over|safety check)\b/.test(t)) return "Daily check";
   if (/\b(serviced|service|oil change|changed the oil|oil and filter)/.test(t)) return "Service";
@@ -387,6 +436,7 @@ function vfApply(){
   const said = vfCap(raw), prev = String(d.mm_what || "").trim();
   if (!prev.includes(said)) d.mm_what = (prev ? prev + " " : "") + (/[.!?]$/.test(said) ? said : said + ".");
   done.push("Your words are in the box below");
+  if (/\b(brakes?|steering|hydraulic|hydraulics|lifting|chains?|tyres?|wheels?|boom|structural|cracked|safety)\b/.test(normTxt(raw))) todo.push("You mentioned something safety-related. Answer the safety question yourself: Yes sends it to a qualified mechanic.");
   VF.result = { done, todo };
   CURRENT_FORM.updatedAt = Date.now(); save(); render();
   toast("Filled in. Check it, fix anything, then save.");
@@ -458,7 +508,7 @@ window.MCK_VF = { toggle:vfToggle, apply:vfApply, set:v => { VF.text = v; }, par
 /* ---------- Template: the Maintenance Record ---------- */
 TEMPLATES.push({
   id:"MCK-Maint-Log", name:"Maintenance Record", category:"Machinery Maintenance", code:"MCK-Maint-Log", version:"v1", icon:"🔧",
-  workflow:{ type:"linear", columns:["Logged","Signed off by mechanic"], default:"Logged" },
+  workflow:{ type:"linear", columns:["Logged","Signed off by competent person","Signed off by mechanic","Signed off by HVIS inspector"], default:"Logged" },
   instructions:"A quick record of any service, repair, problem or check on a machine, truck or tool. Tap the microphone and talk about it. Work done by the crew is checked and signed by a qualified mechanic; leave the mechanic's box until they have looked at it.",
   summary:{ titleField:"mm_asset", subField:"mm_date", tagField:"mm_kind" },
   prefillDefaults:{ mm_date:"@today", mm_by:"@user" },
@@ -476,23 +526,42 @@ TEMPLATES.push({
       {id:"mm_what", label:"Tap the microphone and talk: what you did, or what is wrong", type:"textarea", voice:true, voiceHint:"Just talk, like telling a mate. You can fix the words afterwards.", required:true},
       {id:"mm_parts", label:"Parts and fluids used (if any)", type:"text"},
       {id:"mm_photos", label:"Photos (for a calibration, take a photo of the certificate)", type:"photos"},
+      {id:"mm_safety", label:"Is there a safety issue, or does the job involve brakes, steering, hydraulics, lifting gear, tyres or wheels, or structure?", type:"select", options:["No","Yes"], affectsVisibility:true, showIf:{field:"mm_kind", includesAny:SAFETY_KINDS}},
+      {id:"mm_safety_notice", label:"", type:"notice", variant:"warning", html:"<p><strong>A safety issue needs a qualified mechanic to check and sign it off.</strong> The mechanic section is at the bottom of this form.</p>", showIf:{field:"mm_safety", equals:"Yes"}},
       {id:"mm_after", label:"Is it safe to keep using?", type:"select", options:AFTER, affectsVisibility:true},
       {id:"mm_tag_notice", label:"", type:"notice", variant:"danger", html:"<p><strong>Do not use it.</strong> Tag it out, park it where nobody will start it, and tell the Supervisor.</p>", showIf:{field:"mm_after", equals:"Do not use - tag out"}},
       {id:"mm_by", label:"Done by", type:"select", options:USERS}
     ]},
-    {id:"mech", title:"Qualified mechanic sign-off",
-      info:"A qualified mechanic checks and signs work done by the crew. Problem reports and daily checks do not need a signature. Add a mechanic's name under Asset Register › Mechanics, or choose Other and type it.",
+    {id:"comp", title:"Competent person sign-off (routine service)",
+      info:"Routine servicing (oil and filter changes, greasing, general checks) with no safety issue is checked and signed by a competent person from the list under Asset Register › People who sign off. Anything with a safety issue, and any repair, goes to a qualified mechanic instead.",
       fields:[
-        {id:"mm_mech_note", label:"Mechanic's comment (tap the microphone and talk)", type:"textarea", voice:true, voiceHint:"Mechanic: say what you checked or changed.", showIf:NEEDS_SHOW},
-        {id:"mm_mech", label:"Mechanic", type:"select", options:MECH_OPTIONS, affectsVisibility:true, showIf:NEEDS_SHOW},
+        {id:"mm_comp_note", label:"Comment (tap the microphone and talk)", type:"textarea", voice:true, voiceHint:"Say what you checked or did.", showIf:SHOW_COMP},
+        {id:"mm_comp", label:"Competent person", type:"select", options:COMP_OPTIONS, affectsVisibility:true, showIf:SHOW_COMP},
+        {id:"mm_comp_other", label:"Name", type:"text", showIf:{field:"mm_comp", equals:OTHER_COMP}},
+        {id:"mm_comp_sig", label:"Competent person's signature", type:"signature", requiresFields:[{field:"mm_comp", message:"Choose the competent person first"},{field:"mm_safety", message:"Answer the safety question first"}], showIf:SHOW_COMP}
+    ]},
+    {id:"mech", title:"Qualified mechanic sign-off",
+      info:"Any safety issue, and any repair, is checked and signed by a qualified mechanic. Add a mechanic under Asset Register › People who sign off, or choose Other and type the name.",
+      fields:[
+        {id:"mm_mech_note", label:"Mechanic's comment (tap the microphone and talk)", type:"textarea", voice:true, voiceHint:"Mechanic: say what you checked or changed.", showIf:SHOW_MECH},
+        {id:"mm_mech", label:"Mechanic", type:"select", options:MECH_OPTIONS, affectsVisibility:true, showIf:SHOW_MECH},
         {id:"mm_mech_other", label:"Mechanic's name", type:"text", showIf:{field:"mm_mech", equals:OTHER_MECH}},
-        {id:"mm_mech_sig", label:"Mechanic's signature", type:"signature", requiresText:{field:"mm_mech", minChars:2, message:"Choose the mechanic first"}, showIf:NEEDS_SHOW}
+        {id:"mm_mech_sig", label:"Mechanic's signature", type:"signature", requiresText:{field:"mm_mech", minChars:2, message:"Choose the mechanic first"}, showIf:SHOW_MECH}
+    ]},
+    {id:"hvis", title:"Heavy vehicle inspector sign-off (HVIS)",
+      info:"The heavy vehicle inspection is done and signed by the authorised HVIS inspector. Attach the inspection report or certificate as a photo. A signed inspection sets the next yearly inspection date for this truck.",
+      fields:[
+        {id:"mm_hvis_note", label:"Inspector's comment (tap the microphone and talk)", type:"textarea", voice:true, voiceHint:"Inspector: say what you found.", showIf:SHOW_HVIS},
+        {id:"mm_hvis", label:"HVIS inspector", type:"select", options:INSP_OPTIONS, affectsVisibility:true, showIf:SHOW_HVIS},
+        {id:"mm_hvis_other", label:"Inspector's name", type:"text", showIf:{field:"mm_hvis", equals:OTHER_INSP}},
+        {id:"mm_hvis_sig", label:"Inspector's signature", type:"signature", requiresText:{field:"mm_hvis", minChars:2, message:"Choose the inspector first"}, showIf:SHOW_HVIS}
     ]}
   ]
 });
 
 /* Work out what a field of type "assetInfo" shows */
 window.MCK_RENDER_ASSETINFO = function(f, fld){
+  f.data.mm_level = levelOf(f);          // who has to sign this one (drives which sign-off section shows)
   const a = assetById(assetIdOf(f.data.mm_asset));
   if (a && f.data.mm_unit_for !== a.id){ f.data.mm_unit_for = a.id; if (a.meterType === "km") f.data.mm_unit = "Kilometres"; else if (a.meterType === "hours") f.data.mm_unit = "Hours"; }
   if (!a) return `<div class="field"><div class="notice notice-info">Pick the machine, truck or tool. If it is not in the list, choose <em>Other / not listed</em> and say what it is in the box below.</div></div>`;
@@ -508,10 +577,14 @@ window.MCK_RENDER_ASSETINFO = function(f, fld){
 /* Mechanic's signature: move the record along */
 window.MCK_ASSETS = {
   onSigned(form, fid){
-    if (form.templateId !== "MCK-Maint-Log" || fid !== "mm_mech_sig") return;
-    form.workflowColumn = "Signed off by mechanic";
-    const who = form.data.mm_mech === OTHER_MECH ? (form.data.mm_mech_other || "a mechanic") : (form.data.mm_mech || "a mechanic");
-    (form.activity = form.activity || []).push({ who: STATE.currentUser, when: Date.now(), what: "Signed off by mechanic: " + who });
+    const map = { mm_comp_sig:["Signed off by competent person","a competent person", () => form.data.mm_comp === OTHER_COMP ? form.data.mm_comp_other : form.data.mm_comp],
+                  mm_mech_sig:["Signed off by mechanic","a mechanic", () => form.data.mm_mech === OTHER_MECH ? form.data.mm_mech_other : form.data.mm_mech],
+                  mm_hvis_sig:["Signed off by HVIS inspector","an inspector", () => form.data.mm_hvis === OTHER_INSP ? form.data.mm_hvis_other : form.data.mm_hvis] };
+    const m = map[fid];
+    if (form.templateId !== "MCK-Maint-Log" || !m) return;
+    form.workflowColumn = m[0];
+    const who = m[2]() || m[1];
+    (form.activity = form.activity || []).push({ who: STATE.currentUser, when: Date.now(), what: m[0] + ": " + who + (who !== STATE.currentUser ? " (signature drawn while logged in as " + STATE.currentUser + ")" : "") });
     save();
   }
 };
@@ -599,14 +672,26 @@ window.MCKA = {
     touch(a); closeModal(); toast("Saved"); render();
   },
   mechanics(){
-    const list = DATA.mechanics.map((m,i) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(m)}</span><button class="btn sm danger" onclick="MCKA.delMech(${i})">Remove</button></div>`).join("") || `<p style="color:var(--muted)">No mechanics added yet.</p>`;
-    showModal("Qualified mechanics",
-      `<p style="margin-top:0">Anyone on this list can sign off work. You can add as many as you like, including mechanics who come in for a job. Someone not on the list can still be typed in on the form.</p>${list}
-       <div style="display:flex;gap:8px;margin-top:12px"><input id="mckaMechName" type="text" placeholder="Name, and company if they are contracted" style="flex:1"><button class="btn primary" onclick="MCKA.addMech()">Add</button></div>`,
+    const block = (key, title, help, withBasis) => {
+      const arr = DATA[key] || [];
+      const rows = arr.map((m,i) => `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><div style="display:flex;justify-content:space-between;align-items:center"><span><strong>${esc(m)}</strong></span><button class="btn sm danger" onclick="MCKA.delPerson('${key}',${i})">Remove</button></div>${withBasis && (DATA.competentBasis||{})[m] ? `<div style="font-size:12px;color:var(--muted)">${esc(DATA.competentBasis[m])}</div>` : ""}</div>`).join("") || `<p style="color:var(--muted);margin:4px 0">Nobody added yet.</p>`;
+      return `<h3 style="margin:14px 0 4px;font-size:15px">${title}</h3><p style="margin:0 0 4px;font-size:13px;color:var(--muted)">${help}</p>${rows}
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><input id="mckaP_${key}" type="text" placeholder="Name${key==="mechanics"?", and company if contracted":""}" style="flex:1;min-width:160px">${withBasis ? `<input id="mckaB_${key}" type="text" placeholder="Why they are competent (experience, training)" style="flex:2;min-width:220px">` : ""}<button class="btn primary" onclick="MCKA.addPerson('${key}')">Add</button></div>`;
+    };
+    showModal("People who sign off",
+      `<p style="margin-top:0">These lists fill the sign-off boxes on the Maintenance Record. The person who signs must be the person who actually checked the work.</p>
+       ${block("competent","Competent persons (routine servicing)","Can sign routine services with no safety issue. Write down why each is competent: this is your evidence for the ISO competence requirement.",true)}
+       ${block("mechanics","Qualified mechanics (safety issues and repairs)","Trade-qualified. Must sign any job with a safety issue, and any repair.",false)}
+       ${block("inspectors","HVIS inspectors (heavy vehicle inspections)","Authorised heavy vehicle inspectors who sign the yearly inspection.",false)}`,
       `<button class="btn" onclick="closeModal()">Done</button>`);
   },
-  addMech(){ const el = document.getElementById("mckaMechName"), n = el.value.trim(); if (!n) return; if (DATA.mechanics.indexOf(n) < 0) DATA.mechanics.push(n); DATA.mechUpdatedAt = Date.now(); DATA.dirty = true; persist(); refreshOptions(); publishSoon(); MCKA.mechanics(); },
-  delMech(i){ DATA.mechanics.splice(i,1); DATA.mechUpdatedAt = Date.now(); DATA.dirty = true; persist(); refreshOptions(); publishSoon(); MCKA.mechanics(); },
+  addPerson(key){
+    const el = document.getElementById("mckaP_" + key), n = el ? el.value.trim() : ""; if (!n) return;
+    DATA[key] = DATA[key] || []; if (DATA[key].indexOf(n) < 0) DATA[key].push(n);
+    if (key === "competent"){ const b = document.getElementById("mckaB_competent"); DATA.competentBasis = DATA.competentBasis || {}; if (b && b.value.trim()) DATA.competentBasis[n] = b.value.trim(); }
+    DATA.mechUpdatedAt = Date.now(); DATA.dirty = true; persist(); refreshOptions(); publishSoon(); MCKA.mechanics();
+  },
+  delPerson(key, i){ DATA[key].splice(i,1); DATA.mechUpdatedAt = Date.now(); DATA.dirty = true; persist(); refreshOptions(); publishSoon(); MCKA.mechanics(); },
   share(){ publish(false); },
   openForm(fid){ const f = (STATE.forms||[]).find(x => x.id === fid); if (f) nav("form", { id:f.templateId, formId:f.id }); }
 };
@@ -630,7 +715,7 @@ function tableRows(){
       <td>${esc(a.name)}<div style="font-size:12px;color:var(--muted)">${esc(a.category)}${a.rego ? " · " + esc(a.rego) : ""}</div></td>
       <td>${s.reading != null ? fmtN(s.reading) + " " + s.unit : "<span style='color:var(--muted)'>—</span>"}<div style="font-size:12px;color:var(--muted)">${s.readingDate ? niceDate(s.readingDate) : ""}</div></td>
       <td>${nextTxt}${regs.map(r => `<div style="margin-top:3px">${pill(r.text, r.state)}</div>`).join("")}</td>
-      <td>${a.status !== "Active" ? pill(a.status, "setup") : useBadge(s)}${s.awaiting.length ? `<div style="font-size:12px;color:#b9770e;margin-top:3px">${s.awaiting.length} waiting for mechanic</div>` : ""}</td>
+      <td>${a.status !== "Active" ? pill(a.status, "setup") : useBadge(s)}${s.awaiting.length ? `<div style="font-size:12px;color:#b9770e;margin-top:3px">${s.awaiting.length} waiting for sign-off</div>` : ""}</td>
       <td style="text-align:right"><button class="btn sm" onclick="event.stopPropagation();MCKA.log('${esc(a.id)}','')">🎤 Log work</button></td></tr>`;
   }).join("");
 }
@@ -642,7 +727,7 @@ function attentionList(){
     if (s.use === "out") out.push({ rank:0, a, tag:pill("Do not use","overdue"), text:s.useWhy });
     s.items.filter(i => i.state === "overdue" || i.state === "soon").forEach(i => out.push({ rank: i.state==="overdue"?1:3, a, tag:pill(i.state==="overdue"?"Overdue":"Due soon", i.state), text:i.text }));
     s.problems.forEach(f => out.push({ rank:2, a, tag:pill("Problem","soon"), text:(f.data.mm_what||"").slice(0,110) + " (" + niceDate(logDate(f)) + ")", fid:f.id }));
-    s.awaiting.forEach(f => out.push({ rank:4, a, tag:pill("Needs mechanic","setup"), text:(f.data.mm_kind||"") + ": " + (f.data.mm_what||"").slice(0,100) + " (" + niceDate(logDate(f)) + ")", fid:f.id }));
+    s.awaiting.forEach(f => out.push({ rank:4, a, tag:pill("Needs sign-off","setup"), text:(f.data.mm_kind||"") + ": " + (f.data.mm_what||"").slice(0,100) + " (" + niceDate(logDate(f)) + ")", fid:f.id }));
   });
   return out.sort((x,y) => x.rank - y.rank);
 }
@@ -657,11 +742,11 @@ function renderRegister(m){
     <p style="margin:0 0 12px;color:var(--muted)">${FIELD ? "Tap a machine, then tap the microphone and talk." : "Plant, trucks and tools. Service due comes from the hours or km on the records, so keep logging them."}</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
       <button class="btn primary" onclick="MCKA.pick()" style="font-size:15px;padding:10px 16px">🎤 Log work or a problem</button>
-      ${FIELD ? "" : `<button class="btn" onclick="MCKA.edit('')">＋ Add an asset</button><button class="btn" onclick="MCKA.mechanics()">👷 Mechanics (${DATA.mechanics.length})</button>`}
+      ${FIELD ? "" : `<button class="btn" onclick="MCKA.edit('')">＋ Add an asset</button><button class="btn" onclick="MCKA.mechanics()">👷 People who sign off</button>`}
       ${FIELD ? "" : (DATA.dirty ? `<button class="btn" onclick="MCKA.share()">⇪ Share with phones</button>` : "")}
     </div>
     ${FIELD ? "" : `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-      ${tile(count(1)+count(0), "Overdue or tagged out", "#c0392b")}${tile(count(3), "Service due soon", "#b9770e")}${tile(count(2), "Problems reported", "#b9770e")}${tile(count(4), "Waiting for a mechanic", "#6b7280")}</div>
+      ${tile(count(1)+count(0), "Overdue or tagged out", "#c0392b")}${tile(count(3), "Service due soon", "#b9770e")}${tile(count(2), "Problems reported", "#b9770e")}${tile(count(4), "Waiting for sign-off", "#6b7280")}</div>
     ${att.length ? card(`<h3 style="margin:0 0 8px;font-size:16px">Needs attention</h3>${att.slice(0,12).map(x => `<div style="display:flex;gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line);cursor:pointer" onclick="${x.fid ? `MCKA.openForm('${x.fid}')` : `MCKA.open('${esc(x.a.id)}')`}"><span style="min-width:110px">${x.tag}</span><span><strong>${esc(x.a.id)} ${esc(x.a.name)}</strong> — ${esc(x.text)}</span></div>`).join("")}${att.length > 12 ? `<p style="color:var(--muted);margin:8px 0 0">…and ${att.length-12} more.</p>` : ""}`) : card(`<strong>All clear.</strong> <span style="color:var(--muted)">Nothing is overdue, reported or waiting for a mechanic.</span>`)}`}
     ${card(`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <select onchange="MCKA.cat(this.value)"><option>All</option>${CATS.map(c => `<option ${UI.cat===c?"selected":""}>${esc(c)}</option>`).join("")}</select>
@@ -690,7 +775,7 @@ function renderDetail(m, id){
     ${s ? card(`<h3 style="margin:0 0 6px;font-size:16px">Reading and servicing</h3>
       <div style="margin-bottom:6px">Reading: <strong>${s.reading != null ? fmtN(s.reading) + " " + s.unit : "none yet"}</strong>${s.readingDate ? ` <span style="color:var(--muted)">(${niceDate(s.readingDate)})</span>` : ""}${a.serviceSource ? ` · <span style="color:var(--muted)">Interval: ${esc(a.serviceSource)}</span>` : ""}${s.lastSvcMeter != null || s.lastSvcDate ? ` · last service ${s.lastSvcMeter != null ? fmtN(s.lastSvcMeter) + " " + s.unit : ""}${s.lastSvcDate ? " on " + niceDate(s.lastSvcDate) : ""}` : ""}</div>${sched}`) : ""}
     ${info.length ? card(`<h3 style="margin:0 0 6px;font-size:16px">Details</h3>${info.map(r => `<div style="display:flex;gap:10px;padding:3px 0"><span style="min-width:120px;color:var(--muted)">${esc(r[0])}</span><span>${esc(r[1])}</span></div>`).join("")}`) : ""}
-    ${card(`<h3 style="margin:0 0 8px;font-size:16px">History (${logs.length})</h3>${logs.length ? `<div class="list" style="overflow:auto"><table><thead><tr><th>Date</th><th>Kind</th><th>What</th><th>Reading</th><th>By</th><th>Mechanic</th></tr></thead><tbody>${logs.map(f => `<tr style="cursor:pointer" onclick="MCKA.openForm('${f.id}')"><td>${niceDate(logDate(f))}</td><td>${esc(f.data.mm_kind||"")}</td><td>${esc((f.data.mm_what||"").slice(0,140))}</td><td>${f.data.mm_meter ? esc(fmtN(num(f.data.mm_meter))) + (f.data.mm_unit ? " " + (f.data.mm_unit === "Hours" ? "h" : "km") : "") : ""}</td><td>${esc(f.data.mm_by||"")}</td><td>${signedOff(f) ? "✓ " + esc(f.data.mm_mech === OTHER_MECH ? (f.data.mm_mech_other||"") : (f.data.mm_mech||"")) : (NEEDS_MECHANIC.indexOf(f.data.mm_kind) >= 0 ? "<span style='color:#b9770e'>waiting</span>" : "")}</td></tr>`).join("")}</tbody></table></div>` : `<span style="color:var(--muted)">No records yet. Tap “Log work” and talk.</span>`}${FIELD ? `<p style="font-size:12px;color:var(--muted);margin:8px 0 0">This phone only shows your own recent records. The full history is on the desktop app.</p>` : ""}`)}
+    ${card(`<h3 style="margin:0 0 8px;font-size:16px">History (${logs.length})</h3>${logs.length ? `<div class="list" style="overflow:auto"><table><thead><tr><th>Date</th><th>Kind</th><th>What</th><th>Reading</th><th>By</th><th>Signed off</th></tr></thead><tbody>${logs.map(f => `<tr style="cursor:pointer" onclick="MCKA.openForm('${f.id}')"><td>${niceDate(logDate(f))}</td><td>${esc(f.data.mm_kind||"")}</td><td>${esc((f.data.mm_what||"").slice(0,140))}</td><td>${f.data.mm_meter ? esc(fmtN(num(f.data.mm_meter))) + (f.data.mm_unit ? " " + (f.data.mm_unit === "Hours" ? "h" : "km") : "") : ""}</td><td>${esc(f.data.mm_by||"")}</td><td>${signedOff(f) ? "✓ " + esc(signerName(f)) : (levelOf(f) ? "<span style='color:#b9770e'>waiting (" + (levelOf(f) === "hvis" ? "HVIS inspector" : levelOf(f) === "mechanic" ? "mechanic" : "competent person") + ")</span>" : "")}</td></tr>`).join("")}</tbody></table></div>` : `<span style="color:var(--muted)">No records yet. Tap “Log work” and talk.</span>`}${FIELD ? `<p style="font-size:12px;color:var(--muted);margin:8px 0 0">This phone only shows your own recent records. The full history is on the desktop app.</p>` : ""}`)}
   </div>`;
 }
 
