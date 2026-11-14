@@ -5146,7 +5146,7 @@ function clearSigCanvas(fid){
 /* ---------------- Voice dictation (tap the microphone and talk) ----------------
    Uses the browser's speech recognition where it exists (Chrome/Edge on Android and desktop, Safari in the browser).
    Where it does not (some home-screen app modes), the keyboard microphone on the phone does the same job. */
-const VOICE = { rec:null, fid:null, btn:null, active:false, base:"" };
+const VOICE = { ctl:null, fid:null, btn:null, active:false };
 /* Phone browsers (Android Chrome especially) can hand back the same words several times in one
    speech result list: growing guesses ("check", "check the oil"), a final plus a repeat of it, etc.
    Rebuild the transcript from the WHOLE list each time and drop repeats, instead of adding up bits. */
@@ -5171,10 +5171,61 @@ window.mckSpeechParts = function(results){
     interim: segs.filter(x=>!x.fin).map(x=>x.t).join(" ")
   };
 };
+/* One careful speech session manager used by every microphone button.
+   - On phones (Android Chrome / iPhone) it listens one phrase at a time and restarts itself, because the
+     "keep listening" mode on phones is what repeats words over and over.
+   - Only words the phone has marked final are kept; the in-progress guess is shown but never saved.
+   - A phrase identical to the one just before it (a replay after a restart) is ignored.
+   - Only the newest session may write anything, so a stale one can never add text.            */
+window.mckSpeech = {
+  mobile: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.platform || navigator.userAgent)),
+  start(o){
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) return null;
+    const mobile = window.mckSpeech.mobile;
+    let active = true, committed = o.base || "", gen = 0, rec = null, lastFinal = "", lastAt = 0, quiet = 0, sessionFinals = "";
+    const clean = t => t.replace(/\s+\./g,".").replace(/ {2,}/g," ").replace(/\s+$/,"");
+    function fold(){                                       // session over: keep its final words
+      const sf = sessionFinals.trim(); sessionFinals = "";
+      if (!sf) { quiet++; return false; }
+      const same = sf.toLowerCase() === lastFinal.toLowerCase() && Date.now() - lastAt < 4000;
+      if (same) { quiet++; return false; }
+      committed = committed + sf + " "; lastFinal = sf; lastAt = Date.now(); quiet = 0; return true;
+    }
+    function begin(){
+      const my = ++gen; let r;
+      try { r = new SR(); } catch(e){ finish("Could not start the microphone. Use the keyboard microphone instead."); return; }
+      rec = r; r.lang = "en-AU"; r.continuous = !mobile; r.interimResults = true;
+      r.onresult = ev => {
+        if (my !== gen) return;                          // a stopped session may still deliver its last words
+        const p = window.mckSpeechParts(ev.results);
+        const replay = p.finals && p.finals.trim().toLowerCase() === lastFinal.toLowerCase() && Date.now() - lastAt < 4000;   // a restart replaying the phrase just saved
+        sessionFinals = replay ? "" : p.finals;
+        o.onUpdate(clean(committed + sessionFinals + (replay ? "" : p.interim)));
+      };
+      r.onerror = ev => {
+        if (my !== gen) return;
+        if (ev.error === "not-allowed" || ev.error === "service-not-allowed") finish("The microphone is blocked. Allow the microphone for this app in your phone settings, or use the keyboard microphone.");
+        else if (ev.error === "network") finish("Talking needs a phone signal. Use the keyboard microphone, or type it, if you have no coverage.");
+      };
+      r.onend = () => {
+        if (my !== gen) return;
+        fold(); o.onUpdate(clean(committed));              // tidy: show only the saved words
+        if (!active) return;
+        if (quiet >= 4) { finish("Stopped listening - nothing heard. Tap the microphone to carry on."); return; }
+        setTimeout(() => { if (active && my === gen) begin(); }, mobile ? 200 : 50);
+      };
+      try { r.start(); } catch(e){ if (active) setTimeout(() => { if (active && my === gen) begin(); }, 400); }
+    }
+    function finish(msg){ if (!active) return; active = false; gen++; try { rec && rec.abort(); } catch(e){} if (o.onStop) o.onStop(msg || ""); }
+    begin();
+    return { stop(){ if (!active) return; active = false; try { rec && rec.stop(); } catch(e){} }, get text(){ return clean(committed + sessionFinals); } };
+  }
+};
 function voiceStatus(fid, msg){ const el = document.querySelector(`[data-vstatus="${fid}"]`); if (el) el.textContent = msg; }
 function voiceStop(){
   VOICE.active = false;
-  try { if (VOICE.rec) VOICE.rec.stop(); } catch(e){}
+  try { if (VOICE.ctl) VOICE.ctl.stop(); } catch(e){}
+  VOICE.ctl = null;
   if (VOICE.btn){ VOICE.btn.textContent = "🎤 Tap and talk"; VOICE.btn.classList.remove("danger"); VOICE.btn.classList.add("primary"); }
   if (VOICE.fid) voiceStatus(VOICE.fid, "Stopped. Check the words, then carry on.");
 }
@@ -5191,34 +5242,19 @@ function voiceToggle(fid, btn){
   const ta = document.querySelector(`[data-vtext="${fid}"]`);
   if (!ta) return;
   VOICE.fid = fid; VOICE.btn = btn; VOICE.active = true;
-  VOICE.base = ta.value ? ta.value.replace(/\s+$/,"") + " " : "";
-  const rec = new SR();
-  rec.lang = "en-AU"; rec.continuous = true; rec.interimResults = true;
-  rec.onresult = ev => {
-    const parts = window.mckSpeechParts(ev.results);
-    const text = (VOICE.base + parts.finals + parts.interim).replace(/\s+\./g,".").replace(/ {2,}/g," ").replace(/\s+$/,"");
-    ta.value = text; setField(fid, text);
-  };
-  rec.onerror = ev => {
-    if (ev.error === "not-allowed" || ev.error === "service-not-allowed"){
+  const base = ta.value ? ta.value.replace(/\s+$/,"") + " " : "";
+  VOICE.ctl = window.mckSpeech.start({
+    base,
+    onUpdate: text => { ta.value = text; setField(fid, text); },
+    onStop: msg => {
       VOICE.active = false;
-      voiceStatus(fid, "The microphone is blocked. Allow the microphone for this app in your phone settings, or use the keyboard microphone.");
       if (btn){ btn.textContent = "🎤 Tap and talk"; btn.classList.remove("danger"); btn.classList.add("primary"); }
-    } else if (ev.error === "network"){
-      voiceStatus(fid, "Talking needs a phone signal. Use the keyboard microphone, or type it, if you have no coverage.");
+      if (msg) voiceStatus(fid, msg);
     }
-  };
-  rec.onend = () => {
-    if (VOICE.active && VOICE.fid === fid){        // phones end the session on pauses; keep going until Stop
-      VOICE.base = ta.value ? ta.value.replace(/\s+$/,"") + " " : "";
-      try { rec.start(); } catch(e){}
-    }
-  };
-  try {
-    rec.start(); VOICE.rec = rec;
-    btn.textContent = "⏹ Stop"; btn.classList.remove("primary"); btn.classList.add("danger");
-    voiceStatus(fid, "Listening... talk normally, tap Stop when you are done.");
-  } catch(e){ VOICE.active = false; voiceStatus(fid, "Couldn't start the microphone. Use the keyboard microphone instead."); }
+  });
+  if (!VOICE.ctl){ VOICE.active = false; voiceStatus(fid, "Couldn't start the microphone. Use the keyboard microphone instead."); return; }
+  btn.textContent = "⏹ Stop"; btn.classList.remove("primary"); btn.classList.add("danger");
+  voiceStatus(fid, "Listening... talk normally, tap Stop when you are done.");
 }
 document.addEventListener("visibilitychange", () => { if (document.hidden && VOICE.active) voiceStop(); });
 function signNow(fid){

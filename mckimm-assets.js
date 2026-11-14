@@ -31,11 +31,15 @@ const KINDS = ["Service","Calibration","Repair","Problem found","Daily check",HV
    calibration (lab certificate photo) and daily checks with no safety issue need no signature */
 const SAFETY_KINDS = ["Service","Repair","Problem found","Daily check","Other"];
 const isSvc = k => k === "Service" || k === "Calibration";
+/* A record can now be several kinds at once (e.g. a service and a repair). Older records hold a single word. */
+const kindsOf = f => { const k = f && f.data && f.data.mm_kind; return Array.isArray(k) ? k.filter(Boolean) : (k ? [k] : []); };
+const hasKind = (f, k) => kindsOf(f).indexOf(k) >= 0;
+const kindText = f => kindsOf(f).join(" + ");
 const svcWord = a => a.category === "Instrument" ? "calibration" : "service";   // work the crew did: a qualified mechanic signs these
 const AFTER = ["Safe to use","Needs attention soon","Do not use - tag out"];
 const OTHER_MECH = "Other (type name below)";
 const OTHER_COMP = "Other (type name below)", OTHER_INSP = "Other (type name below)";
-const SHOW_COMP = {field:"mm_level", equals:"competent"}, SHOW_MECH = {field:"mm_level", equals:"mechanic"}, SHOW_HVIS = {field:"mm_level", equals:"hvis"};
+const SHOW_COMP = {field:"mm_level", equals:"competent"}, SHOW_MECH = {field:"mm_level", equals:"mechanic"}, SHOW_HVIS = {field:"mm_needs_hvis", equals:"Yes"};
 
 /* ---------- Seed: the machines already in the app. Intervals and readings are left for Al to enter. ---------- */
 const SEED = [
@@ -166,24 +170,27 @@ function logsFor(a){ return (STATE.forms||[]).filter(f => f.templateId==="MCK-Ma
 function logDate(f){ return (f.data && f.data.mm_date) || new Date(f.createdAt||0).toISOString().slice(0,10); }
 const hasSig = (f, k) => !!(f.data && f.data[k] && f.data[k].dataUrl);
 function levelOf(f){
-  const d = (f && f.data) || {}, k = d.mm_kind;
-  if (!k) return "";
-  if (k === HVIS_KIND) return "hvis";
-  if (k === "Calibration") return "";
+  const d = (f && f.data) || {}, ks = kindsOf(f);
+  if (!ks.length) return "";
+  const work = ks.filter(k => k !== HVIS_KIND && k !== "Calibration");       // calibration and the HVIS inspection have their own rules
   const safety = d.mm_safety === "Yes" || d.mm_after === "Needs attention soon" || d.mm_after === "Do not use - tag out";
   let lv = "";
-  if (k === "Repair" || k === "Other" || safety) lv = "mechanic";
-  else if (k === "Service") lv = "competent";
-  if (lv === "competent" && hasSig(f, "mm_mech_sig") && !hasSig(f, "mm_comp_sig")) lv = "mechanic";   // older records a mechanic already signed
+  if (work.length){
+    if (work.indexOf("Repair") >= 0 || work.indexOf("Other") >= 0 || safety) lv = "mechanic";
+    else if (work.indexOf("Service") >= 0) lv = "competent";
+    if (lv === "competent" && hasSig(f, "mm_mech_sig") && !hasSig(f, "mm_comp_sig")) lv = "mechanic";   // older records a mechanic already signed
+  }
+  if (!lv && ks.indexOf(HVIS_KIND) >= 0) lv = "hvis";
   return lv;
 }
-function sigOk(f){
+function sigOkBase(f){
   const lv = levelOf(f);
   if (lv === "mechanic") return hasSig(f, "mm_mech_sig");
   if (lv === "competent") return hasSig(f, "mm_comp_sig") || hasSig(f, "mm_mech_sig");
   if (lv === "hvis") return hasSig(f, "mm_hvis_sig");
   return true;
 }
+function sigOk(f){ return sigOkBase(f) && (!hasKind(f, HVIS_KIND) || hasSig(f, "mm_hvis_sig")); }
 function signedOff(f){ return hasSig(f, "mm_mech_sig") || hasSig(f, "mm_comp_sig") || hasSig(f, "mm_hvis_sig"); }
 function needsMechanic(f){ return !!levelOf(f) && !sigOk(f); }       // (name kept: means "still waiting for its sign-off")
 function signerName(f){
@@ -205,7 +212,7 @@ function assess(a){
   if (a.psm) (STATE.forms||[]).filter(f => f.templateId===a.psm).forEach(f => consider(f.data && f.data.hours_odo, f.data && f.data.inspection_date));
   // last service: the register's baseline, or any logged service
   let lastSvcMeter = num(a.lastServiceMeter), lastSvcDate = a.lastServiceDate || "";
-  logs.filter(f => isSvc(f.data.mm_kind)).forEach(f => {
+  logs.filter(f => kindsOf(f).some(isSvc)).forEach(f => {
     const m = meterOk(f, a) ? num(f.data.mm_meter) : null, d = logDate(f);
     if (m!=null && (lastSvcMeter==null || m > lastSvcMeter)) lastSvcMeter = m;
     if (!lastSvcDate || d > lastSvcDate) lastSvcDate = d;
@@ -237,7 +244,7 @@ function assess(a){
     items.push({key:"rego", state, days, text: days < 0 ? "Rego EXPIRED " + niceDate(a.regoDue) : "Rego due " + niceDate(a.regoDue)});
   }
   let inspDue = a.inspDue;
-  const hv = logs.find(f => f.data.mm_kind === HVIS_KIND && sigOk(f));
+  const hv = logs.find(f => hasKind(f, HVIS_KIND) && sigOk(f));
   if (hv){ const nd = addMonths(logDate(hv), 12); if (!inspDue || nd > inspDue) inspDue = nd; }
   if (a.inspYearly === "Yes"){
     if (!inspDue) items.push({key:"inspection", state:"setup", text:"Enter the date the yearly roadworthiness inspection is due"});
@@ -263,8 +270,8 @@ function assess(a){
   else if (latestAfter && /Do not use/.test(latestAfter.data.mm_after)){ use = "out"; useWhy = "Tagged out " + niceDate(logDate(latestAfter)); }
   else if (latestAfter && /Needs attention/.test(latestAfter.data.mm_after)){ use = "attn"; useWhy = "Needs attention (" + niceDate(logDate(latestAfter)) + ")"; }
   const awaiting = logs.filter(needsMechanic);
-  const lastFix = logs.find(f => f.data.mm_kind === "Repair" || isSvc(f.data.mm_kind));
-  const problems = logs.filter(f => f.data.mm_kind === "Problem found" && (!lastFix || logDate(f) > logDate(lastFix) || (logDate(f) === logDate(lastFix) && (f.createdAt||0) > (lastFix.createdAt||0))));
+  const lastFix = logs.find(f => hasKind(f, "Repair") || kindsOf(f).some(isSvc));
+  const problems = logs.filter(f => hasKind(f, "Problem found") && (!lastFix || logDate(f) > logDate(lastFix) || (logDate(f) === logDate(lastFix) && (f.createdAt||0) > (lastFix.createdAt||0))));
   const lastSigned = logs.find(signedOff);
   return { logs, reading, readingDate, unit:u, lastSvcMeter, lastSvcDate, items, worst, use, useWhy, awaiting, problems, lastSigned };
 }
@@ -284,7 +291,7 @@ function assess(a){
 /* ---------- Talk to fill the whole Maintenance Record ----------
    One spoken description -> machine, kind of job, meter, date, parts, safe to use, and the full words
    in "what you did". Plain keyword matching on this device (no AI service). The person always checks it. */
-const VF = { text:"", result:null, formId:null, rec:null, active:false, base:"", finals:"" };
+const VF = { text:"", result:null, formId:null, ctl:null, active:false };
 const VF_STOP = new Set(["the","and","for","with","new","old","big","small","truck","plant","tool","inch","site","dual","grade","pump","water","blade"]);
 const normTxt = s => String(s||"").toLowerCase().replace(/[’']/g,"").replace(/[^a-z0-9.,\/ -]+/g," ").replace(/\s+/g," ").trim();
 const DAYNAMES = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
@@ -322,14 +329,15 @@ function vfMatchAsset(t){
   return { asset:scored[0].a, why:"ok" };
 }
 function vfKind(t){
-  if (/\b(hvis|heavy vehicle inspection|roadworthiness|annual inspection)\b/.test(t)) return HVIS_KIND;
-  if (/\bcalibrat/.test(t)) return "Calibration";
-  if (/\b(daily check|pre ?start|walk ?around|checked it over|safety check)\b/.test(t)) return "Daily check";
-  if (/\b(serviced|service|oil change|changed the oil|oil and filter)/.test(t)) return "Service";
-  if (/\b(repair|repaired|fixed|replaced|rebuilt|welded|re-?sealed|swapped)\b/.test(t)) return "Repair";
-  if (/\b(oil|filters?|grease|greased|lubricat)/.test(t)) return "Service";
-  if (/\b(problem|fault|issue|noise|leak|leaking|wont start|not working|broken|damaged|cracked|stuck|overheat)/.test(t)) return "Problem found";
-  return "";
+  const k = [];
+  if (/\b(hvis|heavy vehicle inspection|roadworthiness|annual inspection)\b/.test(t)) k.push(HVIS_KIND);
+  if (/\bcalibrat/.test(t)) k.push("Calibration");
+  if (/\b(daily check|pre ?start|walk ?around|checked it over|safety check)\b/.test(t)) k.push("Daily check");
+  if (/\b(serviced|service|oil change|changed the oil|oil and filter)/.test(t) || /\b(oil|filters?|grease|greased|lubricat)/.test(t)) k.push("Service");
+  const repaired = /\b(repair|repaired|fixed|replaced|rebuilt|welded|re-?sealed|swapped)\b/.test(t);
+  if (repaired) k.push("Repair");
+  if (!repaired && /\b(problem|fault|issue|noise|leak|leaking|wont start|not working|broken|damaged|cracked|stuck|overheat)/.test(t)) k.push("Problem found");
+  return k;
 }
 function vfMeter(t, a){
   if (a && a.meterType === "none") return null;
@@ -435,7 +443,7 @@ function vfApply(){
   const p = vfParse(raw), d = CURRENT_FORM.data, done = [], todo = [];
   if (p.asset){ d.mm_asset = lbl(p.asset); done.push("Machine: " + esc(lbl(p.asset))); }
   else todo.push(p.assetWhy === "several" ? "Not sure which machine (" + esc((p.assetNames||[]).join(", ")) + "?). Pick it from the list." : "Could not tell which machine. Pick it from the list.");
-  if (p.kind){ d.mm_kind = p.kind; done.push("Job: " + esc(p.kind)); } else todo.push("Could not tell the kind of job. Choose it.");
+  if (p.kind && p.kind.length){ d.mm_kind = p.kind; done.push("Job: " + esc(p.kind.join(" + "))); } else todo.push("Could not tell the kind of job. Choose it.");
   if (p.meterInfo){ d.mm_meter = String(p.meterInfo.v); d.mm_unit = p.meterInfo.unit; if (p.asset) d.mm_unit_for = p.asset.id; done.push("Reading: " + fmtN(p.meterInfo.v) + (p.meterInfo.unit === "Hours" ? " hours" : " km")); }
   if (p.date){ d.mm_date = p.date; done.push("Date: " + niceDate(p.date)); }
   if (p.parts){ d.mm_parts = p.parts; done.push("Parts and fluids: " + esc(p.parts)); }
@@ -450,8 +458,8 @@ function vfApply(){
 }
 function vfStop(applyNow){
   VF.active = false;
-  try { if (VF.rec) VF.rec.stop(); } catch(e){}
-  VF.rec = null;
+  try { if (VF.ctl){ VF.text = VF.ctl.text || VF.text; VF.ctl.stop(); } } catch(e){}
+  VF.ctl = null;
   const b = document.getElementById("mckvfBtn"); if (b){ b.textContent = "🎤 Tap and talk"; b.classList.remove("danger"); b.classList.add("primary"); }
   if (applyNow && VF.text.trim()) vfApply();
 }
@@ -462,24 +470,21 @@ function vfToggle(){
   const st = document.getElementById("mckvfStatus");
   if (!SR){ if (st) st.textContent = "Talking is not available in this browser. Type it in the box, or use the microphone on your keyboard, then tap Fill the form."; return; }
   const ta = document.getElementById("mckvfText");
-  VF.base = ta && ta.value ? ta.value.replace(/\s+$/,"") + " " : ""; VF.finals = "";
-  const rec = new SR(); rec.lang = "en-AU"; rec.continuous = true; rec.interimResults = true;
-  rec.onresult = ev => {
-    const parts = window.mckSpeechParts(ev.results);
-    VF.text = (VF.base + parts.finals + parts.interim).replace(/\s+\./g,".").replace(/ {2,}/g," ").replace(/\s+$/,"");
-    const el = document.getElementById("mckvfText"); if (el) el.value = VF.text;
-  };
-  rec.onerror = ev => {
-    const s = document.getElementById("mckvfStatus");
-    if (ev.error === "not-allowed" || ev.error === "service-not-allowed"){ VF.active = false; if (s) s.textContent = "The microphone is blocked. Allow the microphone for this site in the browser, then try again."; }
-    else if (ev.error === "network" && s) s.textContent = "Talking needs an internet connection. Type it instead.";
-  };
-  rec.onend = () => { if (VF.active){ VF.base = VF.text ? VF.text.replace(/\s+$/,"") + " " : ""; VF.finals = ""; try { rec.start(); } catch(e){} } };
-  try {
-    rec.start(); VF.rec = rec; VF.active = true;
-    const b = document.getElementById("mckvfBtn"); if (b){ b.textContent = "⏹ Stop and fill in the form"; b.classList.remove("primary"); b.classList.add("danger"); }
-    if (st) st.textContent = "Listening... talk normally, then tap the button again.";
-  } catch(e){ if (st) st.textContent = "Could not start the microphone. Type it in the box instead."; }
+  const base = ta && ta.value ? ta.value.replace(/\s+$/,"") + " " : "";
+  const b0 = document.getElementById("mckvfBtn");
+  VF.ctl = window.mckSpeech.start({
+    base,
+    onUpdate: text => { VF.text = text; const el = document.getElementById("mckvfText"); if (el) el.value = text; },
+    onStop: msg => {
+      VF.active = false; VF.ctl = null;
+      const b = document.getElementById("mckvfBtn"); if (b){ b.textContent = "🎤 Tap and talk"; b.classList.remove("danger"); b.classList.add("primary"); }
+      const s2 = document.getElementById("mckvfStatus"); if (s2 && msg) s2.textContent = msg;
+    }
+  });
+  if (!VF.ctl){ if (st) st.textContent = "Could not start the microphone. Type it in the box instead."; return; }
+  VF.active = true;
+  if (b0){ b0.textContent = "⏹ Stop and fill in the form"; b0.classList.remove("primary"); b0.classList.add("danger"); }
+  if (st) st.textContent = "Listening... talk normally, then tap the button again.";
 }
 document.addEventListener("visibilitychange", () => { if (document.hidden && VF.active) vfStop(false); });
 
@@ -520,7 +525,7 @@ TEMPLATES.push({
       {id:"mm_voicefill", label:"", type:"voiceFill"},
       {id:"mm_asset", label:"Machine, truck or tool", type:"select", options:ASSET_OPTIONS, required:true, affectsVisibility:true},
       {id:"mm_info", label:"", type:"assetInfo"},
-      {id:"mm_kind", label:"What kind of job is it?", type:"select", options:KINDS, required:true, affectsVisibility:true},
+      {id:"mm_kind", label:"What kind of job is it? (tick every one that applies)", type:"chips", options:KINDS, required:true, affectsVisibility:true},
       {id:"mm_unit", label:"Reading is in", type:"select", options:["Hours","Kilometres"], affectsVisibility:true},
       {id:"mm_meter", label:"Odometer / meter reading now", type:"number"},
       {id:"mm_date", label:"Date", type:"date", required:true}
@@ -565,7 +570,7 @@ TEMPLATES.push({
 
 /* Work out what a field of type "assetInfo" shows */
 window.MCK_RENDER_ASSETINFO = function(f, fld){
-  f.data.mm_level = levelOf(f);          // who has to sign this one (drives which sign-off section shows)
+  f.data.mm_level = levelOf(f); f.data.mm_needs_hvis = hasKind(f, HVIS_KIND) ? "Yes" : "";          // who has to sign this one (drives which sign-off section shows)
   const a = assetById(assetIdOf(f.data.mm_asset));
   if (a && f.data.mm_unit_for !== a.id){ f.data.mm_unit_for = a.id; if (a.meterType === "km") f.data.mm_unit = "Kilometres"; else if (a.meterType === "hours") f.data.mm_unit = "Hours"; }
   if (!a) return `<div class="field"><div class="notice notice-info">Pick the machine, truck or tool. If it is not in the list, choose <em>Other / not listed</em> and say what it is in the box below.</div></div>`;
@@ -610,7 +615,7 @@ window.MCKA = {
   log(id, kind){
     const a = assetById(id);
     const prefill = a ? { mm_asset: lbl(a) } : {};
-    if (kind) prefill.mm_kind = kind;
+    if (kind) prefill.mm_kind = [kind];
     startForm("MCK-Maint-Log", prefill);
   },
   pick(){
@@ -731,7 +736,7 @@ function attentionList(){
     if (s.use === "out") out.push({ rank:0, a, tag:pill("Do not use","overdue"), text:s.useWhy });
     s.items.filter(i => i.state === "overdue" || i.state === "soon").forEach(i => out.push({ rank: i.state==="overdue"?1:3, a, tag:pill(i.state==="overdue"?"Overdue":"Due soon", i.state), text:i.text }));
     s.problems.forEach(f => out.push({ rank:2, a, tag:pill("Problem","soon"), text:(f.data.mm_what||"").slice(0,110) + " (" + niceDate(logDate(f)) + ")", fid:f.id }));
-    s.awaiting.forEach(f => out.push({ rank:4, a, tag:pill("Needs sign-off","setup"), text:(f.data.mm_kind||"") + ": " + (f.data.mm_what||"").slice(0,100) + " (" + niceDate(logDate(f)) + ")", fid:f.id }));
+    s.awaiting.forEach(f => out.push({ rank:4, a, tag:pill("Needs sign-off","setup"), text:kindText(f) + ": " + (f.data.mm_what||"").slice(0,100) + " (" + niceDate(logDate(f)) + ")", fid:f.id }));
   });
   return out.sort((x,y) => x.rank - y.rank);
 }
@@ -779,7 +784,7 @@ function renderDetail(m, id){
     ${s ? card(`<h3 style="margin:0 0 6px;font-size:16px">Reading and servicing</h3>
       <div style="margin-bottom:6px">Reading: <strong>${s.reading != null ? fmtN(s.reading) + " " + s.unit : "none yet"}</strong>${s.readingDate ? ` <span style="color:var(--muted)">(${niceDate(s.readingDate)})</span>` : ""}${a.serviceSource ? ` · <span style="color:var(--muted)">Interval: ${esc(a.serviceSource)}</span>` : ""}${s.lastSvcMeter != null || s.lastSvcDate ? ` · last service ${s.lastSvcMeter != null ? fmtN(s.lastSvcMeter) + " " + s.unit : ""}${s.lastSvcDate ? " on " + niceDate(s.lastSvcDate) : ""}` : ""}</div>${sched}`) : ""}
     ${info.length ? card(`<h3 style="margin:0 0 6px;font-size:16px">Details</h3>${info.map(r => `<div style="display:flex;gap:10px;padding:3px 0"><span style="min-width:120px;color:var(--muted)">${esc(r[0])}</span><span>${esc(r[1])}</span></div>`).join("")}`) : ""}
-    ${card(`<h3 style="margin:0 0 8px;font-size:16px">History (${logs.length})</h3>${logs.length ? `<div class="list" style="overflow:auto"><table><thead><tr><th>Date</th><th>Kind</th><th>What</th><th>Reading</th><th>By</th><th>Signed off</th></tr></thead><tbody>${logs.map(f => `<tr style="cursor:pointer" onclick="MCKA.openForm('${f.id}')"><td>${niceDate(logDate(f))}</td><td>${esc(f.data.mm_kind||"")}</td><td>${esc((f.data.mm_what||"").slice(0,140))}${(f.data.mm_attach||[]).length ? " 📎" + f.data.mm_attach.length : ""}</td><td>${f.data.mm_meter ? esc(fmtN(num(f.data.mm_meter))) + (f.data.mm_unit ? " " + (f.data.mm_unit === "Hours" ? "h" : "km") : "") : ""}</td><td>${esc(f.data.mm_by||"")}</td><td>${signedOff(f) ? "✓ " + esc(signerName(f)) : (levelOf(f) ? "<span style='color:#b9770e'>waiting (" + (levelOf(f) === "hvis" ? "HVIS inspector" : levelOf(f) === "mechanic" ? "mechanic" : "competent person") + ")</span>" : "")}</td></tr>`).join("")}</tbody></table></div>` : `<span style="color:var(--muted)">No records yet. Tap “Log work” and talk.</span>`}${FIELD ? `<p style="font-size:12px;color:var(--muted);margin:8px 0 0">This phone only shows your own recent records. The full history is on the desktop app.</p>` : ""}`)}
+    ${card(`<h3 style="margin:0 0 8px;font-size:16px">History (${logs.length})</h3>${logs.length ? `<div class="list" style="overflow:auto"><table><thead><tr><th>Date</th><th>Kind</th><th>What</th><th>Reading</th><th>By</th><th>Signed off</th></tr></thead><tbody>${logs.map(f => `<tr style="cursor:pointer" onclick="MCKA.openForm('${f.id}')"><td>${niceDate(logDate(f))}</td><td>${esc(kindText(f))}</td><td>${esc((f.data.mm_what||"").slice(0,140))}${(f.data.mm_attach||[]).length ? " 📎" + f.data.mm_attach.length : ""}</td><td>${f.data.mm_meter ? esc(fmtN(num(f.data.mm_meter))) + (f.data.mm_unit ? " " + (f.data.mm_unit === "Hours" ? "h" : "km") : "") : ""}</td><td>${esc(f.data.mm_by||"")}</td><td>${signedOff(f) ? "✓ " + esc(signerName(f)) : (levelOf(f) ? "<span style='color:#b9770e'>waiting (" + (levelOf(f) === "hvis" ? "HVIS inspector" : levelOf(f) === "mechanic" ? "mechanic" : "competent person") + (hasKind(f, HVIS_KIND) && levelOf(f) !== "hvis" ? " + HVIS inspector" : "") + ")</span>" : "")}</td></tr>`).join("")}</tbody></table></div>` : `<span style="color:var(--muted)">No records yet. Tap “Log work” and talk.</span>`}${FIELD ? `<p style="font-size:12px;color:var(--muted);margin:8px 0 0">This phone only shows your own recent records. The full history is on the desktop app.</p>` : ""}`)}
   </div>`;
 }
 
