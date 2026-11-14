@@ -4759,6 +4759,7 @@ function renderForm(m){
       </div>
       <div class="form-body">
         ${t.instructions?`<div class="info-block">${esc(t.instructions)}</div>`:""}
+        ${window.MCK_VF_GENERIC ? MCK_VF_GENERIC(t, f) : ""}
         ${t.sections.map(s=>renderSection(t, f, s)).join("")}
 
         <h2 class="section-title">Activity</h2>
@@ -4841,10 +4842,10 @@ function renderField(t, f, fld){
       return `<div class="field"><label>${esc(fld.label)}${req}</label>
         <input type="time" value="${esc(v||"")}" oninput="setField('${fld.id}', this.value)" /></div>`;
     case "textarea":
-      if (fld.voice) return `<div class="field"><label>${esc(fld.label)}${req}</label>
+      if (fld.voice || MCKIMM_APP !== "field") return `<div class="field"><label>${esc(fld.label)}${req}</label>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 6px">
           <button type="button" class="btn primary voice-btn" data-vfield="${fld.id}" onclick="voiceToggle('${fld.id}', this)" style="font-size:16px;padding:10px 16px">🎤 Tap and talk</button>
-          <span class="voice-status" data-vstatus="${fld.id}" style="font-size:13px;color:var(--muted,#64748b)">${esc(fld.voiceHint||"Talk for a minute about what you did today. You can fix the words afterwards.")}</span>
+          <span class="voice-status" data-vstatus="${fld.id}" style="font-size:13px;color:var(--muted,#64748b)">${esc(fld.voiceHint||(fld.voice ? "Talk for a minute about what you did today. You can fix the words afterwards." : "Tap and talk, or type. You can fix the words afterwards."))}</span>
         </div>
         <textarea data-vtext="${fld.id}" style="min-height:140px" oninput="setField('${fld.id}', this.value)">${esc(v||"")}</textarea></div>`;
       return `<div class="field"><label>${esc(fld.label)}${req}</label>
@@ -4927,6 +4928,8 @@ function renderField(t, f, fld){
     }
     case "locateExpiry":
       return window.MCK_RENDER_LOCATE_EXPIRY ? MCK_RENDER_LOCATE_EXPIRY(f, fld) : "";
+    case "voiceFill":
+      return window.MCK_RENDER_VOICEFILL ? MCK_RENDER_VOICEFILL(f, fld) : "";
     case "assetInfo":
       return window.MCK_RENDER_ASSETINFO ? MCK_RENDER_ASSETINFO(f, fld) : "";
     case "notice":

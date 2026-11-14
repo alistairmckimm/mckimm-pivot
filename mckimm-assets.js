@@ -222,6 +222,236 @@ function assess(a){
     first.fields.unshift({ id:"mvm_note", label:"", type:"notice", variant:"info", html:"<p>The machine list is the Asset Register. For a service, repair or problem, the <strong>Maintenance Record</strong> form is better: it updates the service due dates and can be signed off by the mechanic.</p>" });
 })();
 
+
+/* ---------- Talk to fill the whole Maintenance Record ----------
+   One spoken description -> machine, kind of job, meter, date, parts, safe to use, and the full words
+   in "what you did". Plain keyword matching on this device (no AI service). The person always checks it. */
+const VF = { text:"", result:null, formId:null, rec:null, active:false, base:"", finals:"" };
+const VF_STOP = new Set(["the","and","for","with","new","old","big","small","truck","plant","tool","inch","site","dual","grade","pump","water","blade"]);
+const normTxt = s => String(s||"").toLowerCase().replace(/[’']/g,"").replace(/[^a-z0-9.,\/ -]+/g," ").replace(/\s+/g," ").trim();
+const DAYNAMES = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+function isoOf(d){ return new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+
+function vfMatchAsset(t){
+  const words = new Set(t.split(/[^a-z0-9]+/).filter(Boolean));
+  const compact = t.replace(/[^a-z0-9]+/g,"");
+  let scored = [];
+  DATA.assets.filter(a => a.status !== "Sold / disposed").forEach(a => {
+    let score = 0;
+    const idc = a.id.toLowerCase().replace(/[^a-z0-9]/g,"");           // "ex01"
+    if (compact.includes(idc) && /\d/.test(idc)) score += 10;
+    const nm = normTxt([a.name, a.make, a.model].join(" "));
+    const toks = new Set(nm.split(/[^a-z0-9]+/).filter(x => x.length >= 3 && !VF_STOP.has(x)));
+    toks.forEach(k => {
+      const hasDigit = /\d/.test(k);
+      if (words.has(k)) score += hasDigit ? 4 : 2;
+      else if (hasDigit && k.length >= 4){
+        const kk = k.replace(/[a-z]$/,"");                           // "sh135x" is often said "sh135"
+        if (compact.includes(k) || (kk.length >= 4 && compact.includes(kk))) score += 4;
+      }
+    });
+    const cat = normTxt(a.category).split(/[^a-z]+/)[0];             // "excavator", "grader", "roller"...
+    if (cat && cat.length >= 4 && words.has(cat)) score += 1;
+    const num = /([a-z]{3,})\s+(\d)\b/.exec(nm);                      // "laser 2", "laser 1"
+    if (num && new RegExp("\\b" + num[1] + "\\s+" + num[2] + "\\b").test(t)) score += 3;
+    if (a.rego && compact.includes(String(a.rego).toLowerCase().replace(/[^a-z0-9]/g,""))) score += 10;
+    if (score) scored.push({a, score});
+  });
+  scored.sort((x,y) => y.score - x.score);
+  if (!scored.length || scored[0].score < 2) return { asset:null, why:"none" };
+  if (scored[1] && scored[1].score >= scored[0].score - 1) return { asset:null, why:"several", names:scored.slice(0,3).map(x => x.a.name) };
+  return { asset:scored[0].a, why:"ok" };
+}
+function vfKind(t){
+  if (/\bcalibrat/.test(t)) return "Calibration";
+  if (/\b(daily check|pre ?start|walk ?around|checked it over|safety check)\b/.test(t)) return "Daily check";
+  if (/\b(serviced|service|oil change|changed the oil|oil and filter)/.test(t)) return "Service";
+  if (/\b(repair|repaired|fixed|replaced|rebuilt|welded|re-?sealed|swapped)\b/.test(t)) return "Repair";
+  if (/\b(oil|filters?|grease|greased|lubricat)/.test(t)) return "Service";
+  if (/\b(problem|fault|issue|noise|leak|leaking|wont start|not working|broken|damaged|cracked|stuck|overheat)/.test(t)) return "Problem found";
+  return "";
+}
+function vfMeter(t, a){
+  if (a && a.meterType === "none") return null;
+  const re = /(\d[\d,]*\.?\d*)\s*(hours|hour|hrs|hr|h|kilometres|kilometers|kms|km|ks)\b(\s+\w+)?/g;
+  let m, best = null;
+  while ((m = re.exec(t))){
+    const next = (m[3]||"").trim();
+    if (/^(service|interval|check|inspection|rule)/.test(next)) continue;
+    const before = t.slice(Math.max(0, m.index - 22), m.index);
+    const ctx = /\b(at|on|reading|clock|meter|showing|reads|now)\s*$/.test(before.trim() + " ") || /\b(at|on|reading|clock|meter|showing|reads|now)\b/.test(before);
+    const v = parseFloat(m[1].replace(/,/g,""));
+    if (!isFinite(v)) continue;
+    if (!best || (ctx && !best.ctx)) best = { v, ctx };
+  }
+  if (!best){
+    const m2 = /\b(?:hour meter|meter|odometer|reading|clock)\s*(?:is|was|at|reads|showing|:)?\s*(\d[\d,]*\.?\d*)/.exec(t);
+    if (m2) best = { v: parseFloat(m2[1].replace(/,/g,"")) };
+  }
+  return best && isFinite(best.v) ? best.v : null;
+}
+function vfDate(t){
+  const now = new Date(); now.setHours(0,0,0,0);
+  if (/\byesterday\b/.test(t)){ const d = new Date(now); d.setDate(d.getDate()-1); return isoOf(d); }
+  const dn = new RegExp("\\b(?:last|on)\\s+(" + DAYNAMES.join("|") + ")\\b").exec(t);
+  if (dn){ const want = DAYNAMES.indexOf(dn[1]); const d = new Date(now); let back = (d.getDay() - want + 7) % 7; if (back === 0) back = 7; d.setDate(d.getDate() - back); return isoOf(d); }
+  const mon = MONTHS.join("|");
+  let m = new RegExp("\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(" + mon + ")\\b").exec(t) || null, day, mi;
+  if (m){ day = +m[1]; mi = MONTHS.indexOf(m[2]); }
+  else { m = new RegExp("\\b(" + mon + ")\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b").exec(t); if (m){ mi = MONTHS.indexOf(m[1]); day = +m[2]; } }
+  if (m && day >= 1 && day <= 31){ const d = new Date(now.getFullYear(), mi, day); if (d > now) d.setFullYear(d.getFullYear()-1); return isoOf(d); }
+  return "";
+}
+function vfParts(raw){
+  const m = /\b(?:parts and fluids|parts used|parts|fluids|i used|we used|used|fitted|put in)\b\s*[:,-]?\s*([^.;]{4,140})/i.exec(raw);
+  return m ? m[1].trim().replace(/\s+(and )?(it'?s|its|is it|safe|tag).*$/i,"").replace(/[ ,]+$/,"") : "";
+}
+function vfAfter(t){
+  if (/\b(tag(ged)? out|do not use|dont use|not safe|unsafe|out of service|red tag|not to be used)\b/.test(t)) return "Do not use - tag out";
+  if (/\b(needs attention|keep an eye|watch it|needs doing soon|needs doing|attention soon|before long)\b/.test(t)) return "Needs attention soon";
+  if (/\b(safe to use|safe to keep using|safe to run|good to go|all good|fine to use|no issues|no problems)\b/.test(t)) return "Safe to use";
+  return "";
+}
+function vfParse(raw){
+  const t = normTxt(raw);
+  const am = vfMatchAsset(t);
+  const out = { asset:am.asset, assetWhy:am.why, assetNames:am.names, kind:vfKind(t), meter:vfMeter(t, am.asset), date:vfDate(t), parts:vfParts(raw), after:vfAfter(t) };
+  return out;
+}
+function vfCap(s){ s = String(s||"").trim().replace(/\s+/g," "); return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+/* Any other form on the desktop: the words go in the main notes box, and any choice you named out loud is picked. */
+const GV_SKIP = new Set(["yes","no","na","n a","n/a","pass","fail","ok","other","none","good","poor","fair"]);
+function gvApply(){
+  if (!CURRENT_FORM) return;
+  const raw = (VF.text || "").trim();
+  if (!raw){ toast("Say or type something first"); return; }
+  const f = CURRENT_FORM, t = templateById(f.templateId); if (!t) return;
+  const text = " " + normTxt(raw) + " ";
+  const done = [], d = f.data;
+  const label = fld => String(fld.label || fld.id).replace(/\s*\(.*$/,"").trim();
+  for (let pass = 0; pass < 2; pass++){
+    (t.sections||[]).forEach(s => (s.fields||[]).forEach(fld => {
+      if (!fieldVisible(f, fld) || (fld.type !== "select" && fld.type !== "chips")) return;
+      const opts = (fld.options||[]).filter(o => typeof o === "string");
+      if (!opts.length || opts.some(o => GV_SKIP.has(normTxt(o)))) return;   // yes/no style checks are never filled by voice
+      const hits = opts.filter(o => { const n = normTxt(o); return n.length >= 4 && text.includes(" " + n + " "); });
+      if (!hits.length) return;
+      if (fld.type === "select"){
+        const best = hits.sort((x,y) => y.length - x.length)[0];
+        if (d[fld.id] !== best){ d[fld.id] = best; if (pass === 0) done.push(esc(label(fld)) + ": " + esc(best)); }
+      } else {
+        const cur = Array.isArray(d[fld.id]) ? d[fld.id].slice() : (d[fld.id] ? [d[fld.id]] : []);
+        const add = hits.filter(h => !cur.includes(h));
+        if (add.length){ d[fld.id] = cur.concat(add); if (pass === 0) done.push(esc(label(fld)) + ": " + esc(add.join(", "))); }
+      }
+    }));
+  }
+  const dt = vfDate(normTxt(raw));
+  if (dt){
+    const df = (t.sections||[]).flatMap(s => s.fields||[]).find(x => x.type === "date" && fieldVisible(f, x));
+    if (df){ d[df.id] = dt; done.push(esc(label(df)) + ": " + niceDate(dt)); }
+  }
+  const mf = (t.sections||[]).flatMap(s => s.fields||[]).find(x => x.type === "number" && /hour|km|reading|meter|odometer/i.test(x.label || "") && fieldVisible(f, x));
+  if (mf){ const mv = vfMeter(normTxt(raw), null); if (mv != null){ d[mf.id] = String(mv); done.push(esc(label(mf)) + ": " + fmtN(mv)); } }
+  const notes = (t.sections||[]).flatMap(s => s.fields||[]).filter(x => x.type === "textarea" && fieldVisible(f, x));
+  const nf = notes.find(x => x.voice) || notes[0];
+  const todo = [];
+  if (nf){
+    const said = vfCap(raw), prev = String(d[nf.id] || "").trim();
+    if (!prev.includes(said)) d[nf.id] = (prev ? prev + " " : "") + (/[.!?]$/.test(said) ? said : said + ".");
+    done.push("Your words are in: " + esc(label(nf)));
+  } else todo.push("This form has no notes box, so your words stay in the box above only.");
+  todo.push("Tick-box checks, yes/no answers and signatures are never filled by voice. Do those yourself.");
+  VF.result = { done, todo };
+  f.updatedAt = Date.now(); save(); render();
+  toast("Filled in what I could. Check it, then save.");
+}
+function vfApply(){
+  if (!CURRENT_FORM) return;
+  if (CURRENT_FORM.templateId !== "MCK-Maint-Log") return gvApply();
+  const raw = (VF.text || "").trim();
+  if (!raw){ toast("Say or type what you did first"); return; }
+  const p = vfParse(raw), d = CURRENT_FORM.data, done = [], todo = [];
+  if (p.asset){ d.mm_asset = lbl(p.asset); done.push("Machine: " + esc(lbl(p.asset))); }
+  else todo.push(p.assetWhy === "several" ? "Not sure which machine (" + esc((p.assetNames||[]).join(", ")) + "?). Pick it from the list." : "Could not tell which machine. Pick it from the list.");
+  if (p.kind){ d.mm_kind = p.kind; done.push("Job: " + esc(p.kind)); } else todo.push("Could not tell the kind of job. Choose it.");
+  if (p.meter != null){ d.mm_meter = String(p.meter); done.push("Meter: " + fmtN(p.meter) + (p.asset ? " " + unitOf(p.asset) : "")); }
+  if (p.date){ d.mm_date = p.date; done.push("Date: " + niceDate(p.date)); }
+  if (p.parts){ d.mm_parts = p.parts; done.push("Parts and fluids: " + esc(p.parts)); }
+  if (p.after){ d.mm_after = p.after; done.push("Safe to keep using: " + esc(p.after)); }
+  const said = vfCap(raw), prev = String(d.mm_what || "").trim();
+  if (!prev.includes(said)) d.mm_what = (prev ? prev + " " : "") + (/[.!?]$/.test(said) ? said : said + ".");
+  done.push("Your words are in the box below");
+  VF.result = { done, todo };
+  CURRENT_FORM.updatedAt = Date.now(); save(); render();
+  toast("Filled in. Check it, fix anything, then save.");
+}
+function vfStop(applyNow){
+  VF.active = false;
+  try { if (VF.rec) VF.rec.stop(); } catch(e){}
+  VF.rec = null;
+  const b = document.getElementById("mckvfBtn"); if (b){ b.textContent = "🎤 Tap and talk"; b.classList.remove("danger"); b.classList.add("primary"); }
+  if (applyNow && VF.text.trim()) vfApply();
+}
+function vfToggle(){
+  if (VF.active){ vfStop(true); return; }
+  if (typeof voiceStop === "function") try { voiceStop(); } catch(e){}
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const st = document.getElementById("mckvfStatus");
+  if (!SR){ if (st) st.textContent = "Talking is not available in this browser. Type it in the box, or use the microphone on your keyboard, then tap Fill the form."; return; }
+  const ta = document.getElementById("mckvfText");
+  VF.base = ta && ta.value ? ta.value.replace(/\s+$/,"") + " " : ""; VF.finals = "";
+  const rec = new SR(); rec.lang = "en-AU"; rec.continuous = true; rec.interimResults = true;
+  rec.onresult = ev => {
+    let interim = "";
+    for (let i = ev.resultIndex; i < ev.results.length; i++){
+      const tr = ev.results[i][0].transcript;
+      if (ev.results[i].isFinal) VF.finals += tr.trim() + ". "; else interim += tr;
+    }
+    VF.text = (VF.base + VF.finals + interim.trim()).replace(/\s+\./g,".").replace(/ {2,}/g," ");
+    const el = document.getElementById("mckvfText"); if (el) el.value = VF.text;
+  };
+  rec.onerror = ev => {
+    const s = document.getElementById("mckvfStatus");
+    if (ev.error === "not-allowed" || ev.error === "service-not-allowed"){ VF.active = false; if (s) s.textContent = "The microphone is blocked. Allow the microphone for this site in the browser, then try again."; }
+    else if (ev.error === "network" && s) s.textContent = "Talking needs an internet connection. Type it instead.";
+  };
+  rec.onend = () => { if (VF.active){ VF.base = VF.text ? VF.text.replace(/\s+$/,"") + " " : ""; VF.finals = ""; try { rec.start(); } catch(e){} } };
+  try {
+    rec.start(); VF.rec = rec; VF.active = true;
+    const b = document.getElementById("mckvfBtn"); if (b){ b.textContent = "⏹ Stop and fill in the form"; b.classList.remove("primary"); b.classList.add("danger"); }
+    if (st) st.textContent = "Listening... talk normally, then tap the button again.";
+  } catch(e){ if (st) st.textContent = "Could not start the microphone. Type it in the box instead."; }
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden && VF.active) vfStop(false); });
+
+function vfPanel(f, generic){
+  if (VF.formId !== f.id){ VF.formId = f.id; VF.text = ""; VF.result = null; VF.active = false; }
+  const r = VF.result;
+  const intro = generic
+    ? `Tap the microphone and talk through it: what you found or did, the date, and any choice from a list by name. Your words go in the notes box, and anything you name that matches a list is picked for you. Tick-box checks and signatures are always left for you.`
+    : `Tap the microphone and say which machine, what you did, the hours or km on the meter, anything you used, and whether it is safe to use. For example: <em>"Service on the Komatsu PC200, 4,500 hours, changed the engine oil and filters, used 15 litres of 15W-40, safe to use."</em>`;
+  return `<div class="field"><div class="notice notice-info">
+    <strong>Talk to fill in ${generic ? "this form" : "the whole form"}</strong><br>${intro}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0">
+      <button type="button" id="mckvfBtn" class="btn ${VF.active ? "danger" : "primary"}" style="font-size:16px;padding:10px 16px" onclick="MCK_VF.toggle()">${VF.active ? "⏹ Stop and fill in the form" : "🎤 Tap and talk"}</button>
+      <button type="button" class="btn" onclick="MCK_VF.apply()">Fill the form from the words below</button>
+    </div>
+    <div id="mckvfStatus" style="font-size:13px;margin-bottom:6px">You can also type or fix the words, then tap <em>Fill the form</em>.</div>
+    <textarea id="mckvfText" style="min-height:90px" oninput="MCK_VF.set(this.value)">${esc(VF.text)}</textarea>
+    ${r ? `<div style="margin-top:8px;font-size:14px"><strong>Filled in for you. Please check:</strong><ul style="margin:4px 0 0 18px">${r.done.map(x => "<li>" + x + "</li>").join("")}${r.todo.map(x => "<li><strong>" + x + "</strong></li>").join("")}</ul></div>` : ""}
+  </div></div>`;
+}
+window.MCK_RENDER_VOICEFILL = function(f){ return vfPanel(f, false); };
+window.MCK_VF_GENERIC = function(t, f){
+  if (FIELD || !t || t.id === "MCK-Maint-Log") return "";
+  const has = (t.sections||[]).some(s => (s.fields||[]).some(x => x.type === "textarea" || x.type === "select" || x.type === "chips"));
+  return has ? vfPanel(f, true) : "";
+};
+window.MCK_VF = { toggle:vfToggle, apply:vfApply, set:v => { VF.text = v; }, parse:vfParse };
+
 /* ---------- Template: the Maintenance Record ---------- */
 TEMPLATES.push({
   id:"MCK-Maint-Log", name:"Maintenance Record", category:"Machinery Maintenance", code:"MCK-Maint-Log", version:"v1", icon:"🔧",
@@ -231,6 +461,7 @@ TEMPLATES.push({
   prefillDefaults:{ mm_date:"@today", mm_by:"@user" },
   sections:[
     {id:"what", title:"Which machine", fields:[
+      {id:"mm_voicefill", label:"", type:"voiceFill"},
       {id:"mm_asset", label:"Machine, truck or tool", type:"select", options:ASSET_OPTIONS, required:true, affectsVisibility:true},
       {id:"mm_info", label:"", type:"assetInfo"},
       {id:"mm_kind", label:"What kind of job is it?", type:"select", options:KINDS, required:true, affectsVisibility:true},
