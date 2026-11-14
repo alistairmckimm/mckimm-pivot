@@ -527,11 +527,20 @@ function renderOperatorHome(m){
         <div class="sub">Rockwell Road — Council hold points, spec, locate photos, documents to sign</div>
         <button class="btn primary" style="margin-top:10px;width:100%" onclick="nav('projectinfo')">Open</button>
       </div>` : "";
+  const maintCard = `
+      <div class="card op-card" style="cursor:default">
+        <div class="row"><div class="icn">🔧</div><span class="status">Talk it in</span></div>
+        <div class="title">Machine maintenance</div>
+        <div class="sub">Fixed something, found a problem, did a service? Tap and talk — it is saved to the machine</div>
+        <button class="btn primary" style="margin-top:10px;width:100%;padding:14px;font-size:16px" onclick="MCKA.pick()">🎤 Log work or a problem</button>
+        <button class="btn" style="margin-top:6px;width:100%;padding:12px" onclick="nav('assets')">See the machine list</button>
+      </div>`;
   let quickCards;
   if (!restrictedTemplates){
     quickCards = `
       ${opCard("📋", "Daily Report", STATE.fieldProject?("For "+STATE.fieldProject):"Select a project above first", drForm,
         STATE.fieldProject?`startForm('MCK-Daily-Report',{project_location:'${esc(STATE.fieldProject)}', report_date:'${today}'})`:"", !STATE.fieldProject)}
+      ${maintCard}
       ${opCard("⏱", "Employee Timesheet", "Clock in/out self-photos, work breakdown, fatigue check", tsForm,
         `startForm('MCK-Daily-Timesheet',{employee:'${esc(STATE.currentUser)}', ts_date:'${today}'})`)}
       ${machine
@@ -545,6 +554,7 @@ function renderOperatorHome(m){
       cards.push(opCard("📋", "Daily Report", STATE.fieldProject?("For "+STATE.fieldProject+((window.MCK_PROJ && STATE.fieldProject===MCK_PROJ.RR)?" — talk or type what you did, 3+ photos, then sign off":"")):"Select a project above first", drForm,
         STATE.fieldProject?`startForm('MCK-Daily-Report',{project_location:'${esc(STATE.fieldProject)}', report_date:'${today}'})`:"", !STATE.fieldProject));
     }
+    if (restrictedTemplates.includes("MCK-Maint-Log")) cards.push(maintCard);
     if (restrictedTemplates.includes("MCK-Daily-Timesheet")){
       cards.push(opCard("⏱", "Employee Timesheet", "Clock in/out self-photos, work breakdown, fatigue check", tsForm,
         `startForm('MCK-Daily-Timesheet',{employee:'${esc(STATE.currentUser)}', ts_date:'${today}'})`));
@@ -555,17 +565,7 @@ function renderOperatorHome(m){
     }
     restrictedTemplates.forEach(tid=>{
       if (tid==="MCK-Daily-Report" || tid==="MCK-Daily-Timesheet" || tid.indexOf("MCK-PSM-")===0) return;
-      if (tid==="MCK-Maint-Log"){
-        cards.push(`
-      <div class="card op-card" style="cursor:default">
-        <div class="row"><div class="icn">🔧</div><span class="status">Talk it in</span></div>
-        <div class="title">Machine maintenance</div>
-        <div class="sub">Fixed something, found a problem, did a service? Tap and talk — it is saved to the machine</div>
-        <button class="btn primary" style="margin-top:10px;width:100%" onclick="MCKA.pick()">🎤 Log work or a problem</button>
-        <button class="btn" style="margin-top:6px;width:100%" onclick="nav('assets')">See the machine list</button>
-      </div>`);
-        return;
-      }
+      if (tid==="MCK-Maint-Log") return;
       const t = templateById(tid);
       if (!t) return;
       const prefillJson = esc(JSON.stringify(genericPrefillFor(tid, STATE.fieldProject)));

@@ -1,6 +1,6 @@
 /* McKimm Field — Service Worker
    Offline-first caching for the single-file app. */
-const CACHE = "mckimm-field-v41";
+const CACHE = "mckimm-field-v42";
 const APP_SHELL = [
   "./",
   "./McKimm-Field.html",
