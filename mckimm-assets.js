@@ -83,6 +83,13 @@ if (!DATA.peopleSeeded){
   if (!DATA.inspectors.length) DATA.inspectors.push("Tobias Gordon (HVIS inspector)");
   DATA.peopleSeeded = true; persist0();
 }
+/* Added 15 Nov 2026 on Al's say-so. Runs once per device and only adds names that are missing. */
+if (!DATA.peopleSeeded2){
+  const addMissing = (key, names) => { DATA[key] = DATA[key] || []; names.forEach(n => { if (DATA[key].indexOf(n) < 0) DATA[key].push(n); }); };
+  addMissing("mechanics", ["Tobias Gordon", "Tom Green", "Sean, Jindabyne Auto Electrics (auto electrical safety inspections)"]);
+  addMissing("inspectors", ["Tobias Gordon (HVIS inspector)"]);
+  DATA.peopleSeeded2 = true; persist0();
+}
 function persist0(){ try { localStorage.setItem(LS_KEY_ASSETS, JSON.stringify(DATA)); } catch(e){} }
 const ASSET_OPTIONS = [];
 const MECH_OPTIONS = [], COMP_OPTIONS = [], INSP_OPTIONS = [];
