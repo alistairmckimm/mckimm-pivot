@@ -465,12 +465,8 @@ function vfToggle(){
   VF.base = ta && ta.value ? ta.value.replace(/\s+$/,"") + " " : ""; VF.finals = "";
   const rec = new SR(); rec.lang = "en-AU"; rec.continuous = true; rec.interimResults = true;
   rec.onresult = ev => {
-    let interim = "";
-    for (let i = ev.resultIndex; i < ev.results.length; i++){
-      const tr = ev.results[i][0].transcript;
-      if (ev.results[i].isFinal) VF.finals += tr.trim() + ". "; else interim += tr;
-    }
-    VF.text = (VF.base + VF.finals + interim.trim()).replace(/\s+\./g,".").replace(/ {2,}/g," ");
+    const parts = window.mckSpeechParts(ev.results);
+    VF.text = (VF.base + parts.finals + parts.interim).replace(/\s+\./g,".").replace(/ {2,}/g," ").replace(/\s+$/,"");
     const el = document.getElementById("mckvfText"); if (el) el.value = VF.text;
   };
   rec.onerror = ev => {

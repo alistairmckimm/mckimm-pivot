@@ -5147,6 +5147,30 @@ function clearSigCanvas(fid){
    Uses the browser's speech recognition where it exists (Chrome/Edge on Android and desktop, Safari in the browser).
    Where it does not (some home-screen app modes), the keyboard microphone on the phone does the same job. */
 const VOICE = { rec:null, fid:null, btn:null, active:false, base:"" };
+/* Phone browsers (Android Chrome especially) can hand back the same words several times in one
+   speech result list: growing guesses ("check", "check the oil"), a final plus a repeat of it, etc.
+   Rebuild the transcript from the WHOLE list each time and drop repeats, instead of adding up bits. */
+window.mckSpeechParts = function(results){
+  const segs = [];
+  for (let i = 0; i < results.length; i++){
+    const t = String(results[i][0].transcript || "").trim(); if (!t) continue;
+    const fin = !!results[i].isFinal, tl = t.toLowerCase();
+    const last = segs[segs.length-1];
+    if (last){
+      const ll = last.t.toLowerCase();
+      if (tl === ll){ last.fin = last.fin || fin; continue; }
+      if (tl.startsWith(ll)){ last.t = t; last.fin = fin; continue; }     // a longer version of the same words
+      if (ll.startsWith(tl)) continue;                                       // a shorter repeat
+    }
+    const all = segs.map(x=>x.t.toLowerCase()).join(" ");
+    if (tl.length >= 6 && all.includes(tl)) continue;                        // already said earlier in this list
+    segs.push({ t, fin });
+  }
+  return {
+    finals: segs.filter(x=>x.fin).map(x=>x.t.replace(/[.\s]+$/,"") + ". ").join(""),
+    interim: segs.filter(x=>!x.fin).map(x=>x.t).join(" ")
+  };
+};
 function voiceStatus(fid, msg){ const el = document.querySelector(`[data-vstatus="${fid}"]`); if (el) el.textContent = msg; }
 function voiceStop(){
   VOICE.active = false;
@@ -5168,16 +5192,11 @@ function voiceToggle(fid, btn){
   if (!ta) return;
   VOICE.fid = fid; VOICE.btn = btn; VOICE.active = true;
   VOICE.base = ta.value ? ta.value.replace(/\s+$/,"") + " " : "";
-  let finals = "";
   const rec = new SR();
   rec.lang = "en-AU"; rec.continuous = true; rec.interimResults = true;
   rec.onresult = ev => {
-    let interim = "";
-    for (let i = ev.resultIndex; i < ev.results.length; i++){
-      const t = ev.results[i][0].transcript;
-      if (ev.results[i].isFinal) finals += t.trim() + ". "; else interim += t;
-    }
-    const text = (VOICE.base + finals + interim.trim()).replace(/\s+\./g,".").replace(/ {2,}/g," ");
+    const parts = window.mckSpeechParts(ev.results);
+    const text = (VOICE.base + parts.finals + parts.interim).replace(/\s+\./g,".").replace(/ {2,}/g," ").replace(/\s+$/,"");
     ta.value = text; setField(fid, text);
   };
   rec.onerror = ev => {
@@ -5191,7 +5210,7 @@ function voiceToggle(fid, btn){
   };
   rec.onend = () => {
     if (VOICE.active && VOICE.fid === fid){        // phones end the session on pauses; keep going until Stop
-      VOICE.base = ta.value ? ta.value.replace(/\s+$/,"") + " " : ""; finals = "";
+      VOICE.base = ta.value ? ta.value.replace(/\s+$/,"") + " " : "";
       try { rec.start(); } catch(e){}
     }
   };
