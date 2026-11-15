@@ -19,6 +19,8 @@
   const isRestricted = u => !!OPERATOR_CONFIG[u] && OPERATOR_CONFIG[u].fullAccess !== true;
   const jobsOf = u => isRestricted(u) ? (OPERATOR_CONFIG[u].projects || []) : activeJobs();
 
+  ensureRestrictedDefaults();   // everyone except the owner starts restricted (see mckimm-core.js)
+
   /* ---------- personal phone link: open the phone as one person and keep it on them ---------- */
   function phoneLinkFor(u){
     let base;
@@ -71,8 +73,8 @@
     closeModal(); render(); openUserJobs(u);
   }
   function liftUserRestriction(u){
-    if (!confirm("Give " + u + " full access again (every job and form, with the Admin menu)?")) return;
-    delete OPERATOR_CONFIG[u];
+    if (!confirm("Give " + u + " full access (every job and form, with the Admin menu)?")) return;
+    OPERATOR_CONFIG[u] = { projects: [], templates: [], fullAccess: true };
     persistOperatorConfig();
     closeModal(); render();
   }

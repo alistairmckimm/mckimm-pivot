@@ -619,7 +619,7 @@ function renderOperatorHome(m){
         ${(STATE.lockedUser && STATE.lockedUser===STATE.currentUser && !hasFullAccess(STATE.currentUser))
           ? `<div style="padding:10px 12px;border:1px solid var(--border,#d0d7de);border-radius:8px;background:var(--surface,#f6f8fa);font-weight:600">${esc(STATE.currentUser)}</div>`
           : `<select onchange="STATE.currentUser=this.value; save(); render(); updateTopbar();">
-          ${USERS.map(u=>`<option ${u===STATE.currentUser?"selected":""}>${esc(u)}</option>`).join("")}
+          ${USERS.filter(u=>u!==OWNER_USER || STATE.currentUser===OWNER_USER).map(u=>`<option ${u===STATE.currentUser?"selected":""}>${esc(u)}</option>`).join("")}
         </select>`}
       </div>
     </div>

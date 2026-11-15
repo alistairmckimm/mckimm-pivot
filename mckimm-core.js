@@ -117,6 +117,11 @@ let PROJECT_COMPLIANCE_CONFIG = {};
 const TEAM_CONFIG_CACHE_KEY = "mckimm-team-config-v1";
 const TEAM_CONFIG_DIRTY_KEY = "mckimm-team-config-dirty-v1";
 let TEAM_CONFIG_DIRTY = false;
+/* A published team-config.json carrying a higher "rev" than this device has seen replaces this device's own
+   unpublished job/user edits once (used when Al sets the job list centrally). */
+const TEAM_CONFIG_REV_KEY = "mckimm-team-config-rev-v1";
+let TEAM_CONFIG_REV = 0;
+try { TEAM_CONFIG_REV = Number(localStorage.getItem(TEAM_CONFIG_REV_KEY)) || 0; } catch(e){}
 try { TEAM_CONFIG_DIRTY = localStorage.getItem(TEAM_CONFIG_DIRTY_KEY) === "1"; } catch(e){}
 /* Fix 15 Nov 2026: job/user edits (archive, add, restore) used to live in memory only, and every page load
    replaced them with the published team-config.json (an empty {} until someone clicks "Publish changes to team"),
@@ -136,6 +141,7 @@ function applyTeamConfig(cfg){
   // an archived job never stays on the active list
   ARCHIVED_PROJECTS.forEach(a => { const i = PROJECT_LOCATIONS.indexOf(a); if (i > -1) PROJECT_LOCATIONS.splice(i, 1); });
   if (cfg.projectCompliance && typeof cfg.projectCompliance==="object") PROJECT_COMPLIANCE_CONFIG = cfg.projectCompliance;
+  if (Number(cfg.rev) > TEAM_CONFIG_REV) TEAM_CONFIG_REV = Number(cfg.rev);
 }
 try { applyTeamConfig(JSON.parse(localStorage.getItem(TEAM_CONFIG_CACHE_KEY) || "null")); } catch(e){}
 
@@ -3335,10 +3341,20 @@ function persistOperatorConfig(){
     localStorage.setItem(OPERATOR_CONFIG_DIRTY_KEY, "1");
   } catch(e){}
 }
+/* 15 Nov 2026: everyone except the owner is restricted by default. A person with no entry in
+   operator-templates.json gets the daily-report-only list (William's, without the timesheet) and NO jobs until
+   Al ticks them (people icon beside a job, or Users > Jobs). Full access has to be given on purpose. */
+const OWNER_USER = "Alistair McKimm";
+function ensureRestrictedDefaults(){
+  const w = OPERATOR_CONFIG["William Westaway"];
+  const base = (w && Array.isArray(w.templates) ? w.templates : ["MCK-Daily-Report"]).filter(t => t !== "MCK-Daily-Timesheet");
+  USERS.forEach(u => {
+    if (u !== OWNER_USER && !OPERATOR_CONFIG[u]) OPERATOR_CONFIG[u] = { projects: [], templates: base.slice(), fullAccess: false };
+  });
+}
 function hasFullAccess(userName){
   const c = OPERATOR_CONFIG[userName];
-  // a phone that was opened from a personal link stays restricted until its access has loaded
-  if (!c) return !(typeof STATE !== "undefined" && STATE && STATE.lockedUser === userName);
+  if (!c) return userName === OWNER_USER;
   return c.fullAccess === true;
 }
 async function loadOperatorConfig(){
@@ -3346,8 +3362,9 @@ async function loadOperatorConfig(){
     const r = await fetch("./operator-templates.json", { cache:"no-store" });
     if (r.ok){
       const remote = await r.json();
-      if (OPERATOR_CONFIG_DIRTY) return;   // keep this device's unpublished access edits
+      if (OPERATOR_CONFIG_DIRTY) { ensureRestrictedDefaults(); return; }   // keep this device's unpublished access edits
       OPERATOR_CONFIG = remote;
+      ensureRestrictedDefaults();
       localStorage.setItem(OPERATOR_CONFIG_CACHE_KEY, JSON.stringify(OPERATOR_CONFIG));
       if (typeof render === "function") render();
       if (typeof updateTopbar === "function") updateTopbar();
@@ -3391,15 +3408,18 @@ async function publishOperatorConfig(){
 }
 
 function currentTeamConfig(){
-  return { users: USERS.slice(), projects: PROJECT_LOCATIONS.slice(), archivedProjects: ARCHIVED_PROJECTS.slice(), projectCompliance: {...PROJECT_COMPLIANCE_CONFIG} };
+  return { users: USERS.slice(), projects: PROJECT_LOCATIONS.slice(), archivedProjects: ARCHIVED_PROJECTS.slice(), projectCompliance: {...PROJECT_COMPLIANCE_CONFIG}, rev: TEAM_CONFIG_REV };
 }
 async function loadTeamConfig(){
   try {
     const r = await fetch("./team-config.json", { cache:"no-store" });
     if (r.ok){
       const remote = await r.json();
-      if (TEAM_CONFIG_DIRTY) return;   // keep this device's unpublished job/user edits
+      if (TEAM_CONFIG_DIRTY && !(Number(remote.rev) > TEAM_CONFIG_REV)) return;   // keep this device's unpublished job/user edits
       applyTeamConfig(remote);
+      TEAM_CONFIG_DIRTY = false;
+      localStorage.removeItem(TEAM_CONFIG_DIRTY_KEY);
+      localStorage.setItem(TEAM_CONFIG_REV_KEY, String(TEAM_CONFIG_REV));
       localStorage.setItem(TEAM_CONFIG_CACHE_KEY, JSON.stringify(currentTeamConfig()));
       if (typeof render === "function") render();
       if (typeof updateTopbar === "function") updateTopbar();
@@ -3429,7 +3449,7 @@ async function publishTeamConfig(){
     });
     if (putRes.ok){
       TEAM_CONFIG_DIRTY = false;
-      try { localStorage.setItem(TEAM_CONFIG_CACHE_KEY, JSON.stringify(currentTeamConfig())); localStorage.removeItem(TEAM_CONFIG_DIRTY_KEY); } catch(e){}
+      try { localStorage.setItem(TEAM_CONFIG_CACHE_KEY, JSON.stringify(currentTeamConfig())); localStorage.setItem(TEAM_CONFIG_REV_KEY, String(TEAM_CONFIG_REV)); localStorage.removeItem(TEAM_CONFIG_DIRTY_KEY); } catch(e){}
       return true;
     }
     const err = await putRes.json().catch(()=>({}));
@@ -4607,7 +4627,8 @@ function saveNewUser(){
   if (!name) return;
   if (USERS.includes(name)){ toast("That user already exists"); return; }
   USERS.push(name);
-  TEAM_CONFIG_DIRTY = true; persistTeamConfig();
+  ensureRestrictedDefaults();
+  TEAM_CONFIG_DIRTY = true; persistTeamConfig(); persistOperatorConfig();
   closeModal(); render();
   toast(`Added \u2014 click "Publish changes to team" to push it live`);
 }
@@ -4672,7 +4693,7 @@ function resetOperatorAccess(userName){
   delete OPERATOR_CONFIG[userName];
   persistOperatorConfig();
   closeModal();
-  toast("Reset to full access \u2014 click \"Publish changes to team\" to push this live");
+  toast("Reset to restricted (no jobs) \u2014 click \"Publish changes to team\" to push this live");
   render();
 }
 

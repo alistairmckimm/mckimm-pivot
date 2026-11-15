@@ -1,1 +1,40 @@
-{}
+{
+  "users": [
+    "Alistair McKimm",
+    "Ashley Leatherland",
+    "Damo McLachlan",
+    "Jason Bothur",
+    "Jock Woodhouse",
+    "John Killen",
+    "Luke Williams",
+    "Steve Ibbotson",
+    "Steven Carter",
+    "Simon Story",
+    "William Westaway"
+  ],
+  "projects": [
+    "NSTC",
+    "Rockwell Road Intersection, Berridale",
+    "NSW Biathlon - Barry Way Jindabyne",
+    "Depot Maintenance",
+    "Other (see comments)"
+  ],
+  "archivedProjects": [
+    "10 Taylors Lane, Dalgety",
+    "222 Middlingbank Road, Berridale",
+    "3 Dawson St, Cooma",
+    "310 Campbells Road, Bungarby",
+    "Adventist Alpine Village",
+    "122 Tinworth Drive Jindabyne",
+    "Barry and Virginia",
+    "Coolamah Station",
+    "Mary St Berridale",
+    "McKimm Currun Subdivision",
+    "Numeralla Beresford Rd Grading",
+    "SMRC Landfill Road",
+    "Snowy Mountain Grammar SMEGS",
+    "Sport and Recreation access Road"
+  ],
+  "projectCompliance": {},
+  "rev": 2
+}
