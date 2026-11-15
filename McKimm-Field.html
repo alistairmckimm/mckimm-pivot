@@ -414,8 +414,8 @@ body{ background:var(--bg); }
 <script src="mckimm-training.js"></script>
 <script src="mckimm-sops2.js"></script>
 <script src="mckimm-sitemaint.js"></script>
-<script src="mckimm-jobstart.js"></script>
-<script src="mckimm-program.js"></script>
+<script src="mckimm-nstc.js"></script>
+<script src="mckimm-access.js"></script>
 <script src="mckimm-brand.js"></script>
 <script>
 /* ============================================================
@@ -482,12 +482,14 @@ window.nav = function(view, params={}){
 /* ---------- Operator Home ---------- */
 function fieldProjectOptionsFor(userName){
   const c = OPERATOR_CONFIG[userName];
+  if (!c && STATE.lockedUser === userName) return [];   // personal-link phone whose access has not loaded yet
   if (c && !c.fullAccess) return (c.projects && c.projects.length) ? c.projects : [];
   return PROJECT_LOCATIONS;
 }
 function fieldTemplatesFor(userName){
   // null = unrestricted (today's default quick-start set); array = exactly these template ids
   const c = OPERATOR_CONFIG[userName];
+  if (!c && STATE.lockedUser === userName) return [];   // personal-link phone whose access has not loaded yet
   if (c && !c.fullAccess) return c.templates || [];
   return null;
 }
@@ -614,9 +616,11 @@ function renderOperatorHome(m){
     <div class="stat-grid" style="grid-template-columns:1fr">
       <div class="field" style="margin:0">
         <label>I am</label>
-        <select onchange="STATE.currentUser=this.value; save(); render(); updateTopbar();">
+        ${(STATE.lockedUser && STATE.lockedUser===STATE.currentUser && !hasFullAccess(STATE.currentUser))
+          ? `<div style="padding:10px 12px;border:1px solid var(--border,#d0d7de);border-radius:8px;background:var(--surface,#f6f8fa);font-weight:600">${esc(STATE.currentUser)}</div>`
+          : `<select onchange="STATE.currentUser=this.value; save(); render(); updateTopbar();">
           ${USERS.map(u=>`<option ${u===STATE.currentUser?"selected":""}>${esc(u)}</option>`).join("")}
-        </select>
+        </select>`}
       </div>
     </div>
     <div class="stat-grid" style="grid-template-columns:1fr 1fr;margin-top:10px">
@@ -636,7 +640,6 @@ function renderOperatorHome(m){
       </div>
     </div>
 
-    <div style="margin-top:14px">${window.MCK_JOB ? MCK_JOB.crewCard(STATE.fieldProject) : ""}</div>
     <h2 class="section-title">Today — ${fmtDate(today)}</h2>
     <div class="grid">${projCard}${quickCards}</div>
 

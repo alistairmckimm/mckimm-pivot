@@ -49,7 +49,7 @@
     const i = TEMPLATES.findIndex(x => x.id === t.id);
     if (i > -1) TEMPLATES[i] = t; else TEMPLATES.push(t);
     KEYS.push({ key:o.key, templateId:o.id, scope:"project", projectField:"project",
-                cadenceDays:o.cadenceDays, label:o.label, projects:SITE_PROJECTS });
+                cadenceDays:o.cadenceDays, label:o.label, projects:(o.projects || SITE_PROJECTS).slice() });
   }
 
   /* ---------------- 1. AMENITIES ---------------- */
@@ -135,7 +135,7 @@
   });
 
   /* ---------------- 5. ROCKWELL ROAD: ACCESS, STOCK, NEIGHBOURS & MARKERS ---------------- */
-  chk({ id:"MCK-Site-Access", key:"site-access", icon:"🐄", cadenceDays:7,
+  chk({ id:"MCK-Site-Access", key:"site-access", icon:"🐄", cadenceDays:7, projects:[RR],
     name:"Rockwell Road: Landowner, Stock, Neighbours & Service Markers",
     label:"Landowner, stock, neighbours and service markers (weekly)",
     instructions:"Weekly look at the rural access items on Rockwell Road: gates and stock, neighbour access and complaints, and the locate marks and underground service markers. Site fencing and signs are checked on the Safety Inspection form, not here. If a marker is missing or a service is unclear, stop work in that area and call the Supervisor.",

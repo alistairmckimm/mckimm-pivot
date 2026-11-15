@@ -3323,16 +3323,31 @@ setInterval(()=>{ flushPendingSyncs(); pullSyncedForms(); }, 15000);
 const OPERATOR_CONFIG_CACHE_KEY = "mckimm-operator-config-v1";
 let OPERATOR_CONFIG = {};
 try { OPERATOR_CONFIG = JSON.parse(localStorage.getItem(OPERATOR_CONFIG_CACHE_KEY) || "{}"); } catch(e){ OPERATOR_CONFIG = {}; }
+const OPERATOR_CONFIG_DIRTY_KEY = "mckimm-operator-config-dirty-v1";
 let OPERATOR_CONFIG_DIRTY = false;
+try { OPERATOR_CONFIG_DIRTY = localStorage.getItem(OPERATOR_CONFIG_DIRTY_KEY) === "1"; } catch(e){}
+/* Who can see which job is saved on this device as soon as it is changed, and an unpublished edit is never
+   overwritten by the file on GitHub (same fix as the job list, 15 Nov 2026). Publishing clears the flag. */
+function persistOperatorConfig(){
+  OPERATOR_CONFIG_DIRTY = true;
+  try {
+    localStorage.setItem(OPERATOR_CONFIG_CACHE_KEY, JSON.stringify(OPERATOR_CONFIG));
+    localStorage.setItem(OPERATOR_CONFIG_DIRTY_KEY, "1");
+  } catch(e){}
+}
 function hasFullAccess(userName){
   const c = OPERATOR_CONFIG[userName];
-  return !c || c.fullAccess === true;
+  // a phone that was opened from a personal link stays restricted until its access has loaded
+  if (!c) return !(typeof STATE !== "undefined" && STATE && STATE.lockedUser === userName);
+  return c.fullAccess === true;
 }
 async function loadOperatorConfig(){
   try {
     const r = await fetch("./operator-templates.json", { cache:"no-store" });
     if (r.ok){
-      OPERATOR_CONFIG = await r.json();
+      const remote = await r.json();
+      if (OPERATOR_CONFIG_DIRTY) return;   // keep this device's unpublished access edits
+      OPERATOR_CONFIG = remote;
       localStorage.setItem(OPERATOR_CONFIG_CACHE_KEY, JSON.stringify(OPERATOR_CONFIG));
       if (typeof render === "function") render();
       if (typeof updateTopbar === "function") updateTopbar();
@@ -3362,6 +3377,7 @@ async function publishOperatorConfig(){
     });
     if (putRes.ok){
       OPERATOR_CONFIG_DIRTY = false;
+      try { localStorage.setItem(OPERATOR_CONFIG_CACHE_KEY, JSON.stringify(OPERATOR_CONFIG)); localStorage.removeItem(OPERATOR_CONFIG_DIRTY_KEY); } catch(e){}
       toast("Published \u2014 operators will see this next time they open the app");
       return true;
     }
@@ -3503,6 +3519,7 @@ function renderFolders(){
   let html = list.map(p=>`
     <div class="row" style="justify-content:space-between">
       <span style="display:flex;align-items:center;gap:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="filterByFolder('${esc(p).replace(/'/g,"\\'")}')"><span class="ic">${SIDEBAR_SHOWING_ARCHIVED?"📦":"▸"}</span> ${esc(p)}</span>
+      ${SIDEBAR_SHOWING_ARCHIVED?"":`<span style="opacity:.55;font-size:12px;flex-shrink:0;cursor:pointer;margin-right:6px" title="Who can see this job" onclick="event.stopPropagation();openJobAccess('${esc(p).replace(/'/g,"\\'")}')">&#128101;</span>`}
       <span style="opacity:.55;font-size:12px;flex-shrink:0;cursor:pointer" title="${SIDEBAR_SHOWING_ARCHIVED?"Restore job":"Archive job"}" onclick="event.stopPropagation();${SIDEBAR_SHOWING_ARCHIVED?"restoreJob":"archiveJob"}('${esc(p).replace(/'/g,"\\'")}')">${SIDEBAR_SHOWING_ARCHIVED?"↺":"🗑"}</span>
     </div>
   `).join("");
@@ -4600,8 +4617,7 @@ function removeUser(name){
   if (idx>-1) USERS.splice(idx,1);
   delete OPERATOR_CONFIG[name];
   TEAM_CONFIG_DIRTY = true; persistTeamConfig();
-  OPERATOR_CONFIG_DIRTY = true;
-  localStorage.setItem(OPERATOR_CONFIG_CACHE_KEY, JSON.stringify(OPERATOR_CONFIG));
+  persistOperatorConfig();
   render();
   toast(`Removed \u2014 click "Publish changes to team" to push it live`);
 }
@@ -4647,16 +4663,14 @@ function saveOperatorAccess(userName){
   const projects = [...document.querySelectorAll(".op-proj:checked")].map(el=>el.value);
   const templates = [...document.querySelectorAll(".op-tpl:checked")].map(el=>el.value);
   OPERATOR_CONFIG[userName] = { projects, templates, fullAccess };
-  OPERATOR_CONFIG_DIRTY = true;
-  localStorage.setItem(OPERATOR_CONFIG_CACHE_KEY, JSON.stringify(OPERATOR_CONFIG));
+  persistOperatorConfig();
   closeModal();
   toast("Saved \u2014 click \"Publish changes to team\" to push this live");
   render();
 }
 function resetOperatorAccess(userName){
   delete OPERATOR_CONFIG[userName];
-  OPERATOR_CONFIG_DIRTY = true;
-  localStorage.setItem(OPERATOR_CONFIG_CACHE_KEY, JSON.stringify(OPERATOR_CONFIG));
+  persistOperatorConfig();
   closeModal();
   toast("Reset to full access \u2014 click \"Publish changes to team\" to push this live");
   render();
