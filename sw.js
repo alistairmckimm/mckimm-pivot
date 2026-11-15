@@ -1,6 +1,6 @@
 /* McKimm Pivot — Service Worker
    Offline-first caching for the single-file app. */
-const CACHE = "mckimm-pivot-v67";
+const CACHE = "mckimm-pivot-v68";
 const APP_SHELL = [
   "./",
   "./McKimm-Pivot.html",

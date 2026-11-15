@@ -156,7 +156,7 @@
   }
 
   window.MCK_PROJ = {
-    RR, LOCATE, locateStatus, CREW_DOCS, CREW,
+    RR, LOCATE, locateStatus, CREW_DOCS, CREW, HOLDS,
     get RR_TEMPLATES(){ return Object.keys(D); },
     /* called by createForm(): tokens (e.g. employee/date on SOPs), then project defaults */
     onCreate(form, t){

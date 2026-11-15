@@ -89,7 +89,9 @@
     sections:[
       {id:"job", title:"The job", fields:[
         {id:"js_project", label:"Project / Location", type:"select", options:PROJECT_LOCATIONS, required:true},
-        {id:"js_date", label:"Start date", type:"date", required:true},
+        {id:"js_mob", label:"Mobilise on site (date)", type:"date"},
+        {id:"js_date", label:"Work starts (date)", type:"date", required:true},
+        {id:"js_end", label:"Planned finish (date)", type:"date"},
         {id:"js_by", label:"Supervisor", type:"select", options:USERS, required:true},
         {id:"js_crew", label:"Crew on this job (tick everyone)", type:"chips", options:USERS, required:true}
       ]},
@@ -232,7 +234,7 @@
       try {
         const full = (typeof hasFullAccess !== "function") || hasFullAccess(STATE.currentUser);
         const f = full ? flagCount() : { n:0 };
-        if (full) activeJobs().forEach(jb => { const pr = (jb.data||{}).js_project, b = beforeStart(pr); if (b.n < b.total) extra += `<div class="notice notice-danger" style="margin-bottom:12px;cursor:pointer" onclick="STATE.activeFolder=${JSON.stringify(pr).replace(/"/g,"&quot;")};save();nav('job')"><h3>🏗 ${esc(pr)}: ${b.n} of ${b.total} before-start items done — tap to finish</h3><div style="font-size:13px">${esc(b.items.filter(i => !i.done).map(i => i.label.replace(/ \(.*\)$/, "")).slice(0, 6).join(" · "))}</div></div>`; });
+        if (full) activeJobs().forEach(jb => { const pr = (jb.data||{}).js_project, S = roadmapSummary(pr), soon = S.next.filter(x => !x.due || x.due - Date.now() < 8 * DAY); if (soon.length) extra += `<div class="notice ${S.stage === "Ready to work" ? "notice-warning" : "notice-danger"}" style="margin-bottom:12px;cursor:pointer" onclick="STATE.roadmapJob=${JSON.stringify(pr).replace(/"/g,"&quot;")};save();nav('roadmap')"><h3>🗺 ${esc(pr)}: ${esc(S.stage)} · ${S.doneN} of ${S.totalN} done · ${soon.length} due soon — tap for the roadmap</h3><div style="font-size:13px">${esc(soon.slice(0, 6).map(x => x.rec ? x.rec.label.replace(/ \(.*\)$/, "") : x.it.label).join(" · "))}</div></div>`; });
         if (f.n) extra += `<div class="notice notice-warning" style="margin-bottom:12px;cursor:pointer" onclick="nav('training')"><h3>🚩 ${f.n} job sign-off${f.n === 1 ? "" : "s"} missing — tap to review</h3><div style="font-size:13px">${esc(f.who.slice(0, 6).join(" · "))}${f.who.length > 6 ? " …" : ""}</div></div>`;
       } catch(e){ console.warn("job flags", e); }
       return extra + origBanner();
@@ -677,6 +679,260 @@
       <p style="font-size:13px;color:${MUTED};margin:0 0 8px">Regular checks for this job once it is running. Untick any that do not apply under Compliance → Edit checklist for this project.</p>
       <div class="list" style="overflow:auto"><table><thead><tr><th>Inspection</th><th>How often</th><th>Last done</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
+  /* ---------- Job Roadmap: every template and inspection, in order, with when it is due ---------- */
+  const RM_HOLDS = ["When subgrade work and compaction tests are completed", "Prior to backfilling of the culvert (rural driveway)", "When base material is compacted and compaction tests are completed", "At completion of all works"];
+  const iso = ts => { const d = new Date(ts); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  const dayTs = s => s ? new Date(s + "T00:00:00").getTime() : 0;
+  const todayTs = () => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); };
+  const dmy = ts => ts ? new Date(ts).toLocaleDateString("en-AU", { weekday:"short", day:"numeric", month:"short" }) : "";
+  function rmDates(p){
+    const d = ((jobFor(p) || {}).data) || {};
+    const start = dayTs(d.js_date), mob = dayTs(d.js_mob) || start, end = dayTs(d.js_end);
+    return { start, mob, end, d };
+  }
+  function rmPhases(p){
+    const job = jobFor(p), d = (job && job.data) || {}, plant = arr(d.js_plant), tasks = arr(d.js_tasks);
+    const has = re => tasks.some(x => re.test(x));
+    const isRR = window.MCK_PROJ && p === MCK_PROJ.RR;
+    const dt = rmDates(p);
+    const I = (tid, sig, label, why, more) => Object.assign({ tid, sig: sig ? [].concat(sig) : null, label, why }, more || {});
+    return [
+      { key:"plan", title:"1. Before mobilising: planning and approvals", due:dt.mob, dueLabel:"before mobilisation", items:[
+        I("MCK-Job-Start", "js_signature", "Job Start Checklist: crew, plant and tasks", "Sets which SOPs and SWMS each worker must sign"),
+        I("MCK-WHS-SWMS", "supervisor_signature", "Construction RAMS (site risk assessment)", "Site-specific hazards and controls"),
+        I("MCK-Permits-Site", "issuer_signature", "Site permits check", "Consent, road opening, traffic control plan in place"),
+        I("MCK-Utility-Locate", "supervisor_signature", "Underground services locate (Before You Dig)", "Plans and locator results before any digging"),
+        I("MCK-Enviro-Heritage", "heritage_signature", "Heritage investigation (AI screened)", "Before any ground disturbance"),
+        I("MCK-Eco-Internal", "eco_signature", "Ecological check (internal, or third-party ecologist)", "Before any ground disturbance or clearing", { alt:[["MCK-Eco-ThirdParty", ["ea_signature"]]] }),
+        I("MCK-Enviro-SiteRisk", "eri_inspector_signature", "Environmental risk inspection", "Drains, waterways, weeds, sediment controls needed"),
+        I("MCK-WHS-Emergency", "supervisor_signature", "Emergency procedure", "Nearest hospital, muster point, who to call"),
+        has(/^Pipe laying|slinging/) ? I("MCK-Lift-Plan", "lp_signature", "Lift plan (pre-determined slinging)", "Before the first lift") : null
+      ].filter(Boolean) },
+      { key:"mob", title:"2. Mobilisation: on arrival, before work starts", due:dt.start, dueLabel:"before work starts", items:[
+        I("MCK-Mobilisation", "mob_signature", "Site mobilisation checklist", "Amenities, site office, skip bin, signs, first aid, spill kit, fire extinguisher"),
+        I("MCK-WHS-DiLAP", "inspector_signature", "Dilapidation report: existing condition photos", "Before disturbing anything"),
+        I("MCK-Layout", "completed_signature", "Site layout plan", "Laydown, parking, clean-down area, exclusion zones, weed patches marked"),
+        I("MCK-DAR-002", "signature", "Site safety pre-check", "Site set up safely before the first day of work"),
+        I("MCK-Toolbox-JobStart", "tbj_signature", "Job start toolbox talk and site familiarisation", "Whole crew, first morning"),
+        I("MCK-Safety-Employ", "employee_signature", "Employee site awareness", "Each worker new to the site"),
+        { crew:true, label:"Crew have read and signed every SOP and SWMS for the job", why:"Each worker signs before first doing a task" }
+      ] },
+      { key:"daily", title:"3. Every day on site", daily:true, items:[
+        I("MCK-Daily-Report", "eod_signature", "Daily report", "End of each day"),
+        I("MCK-Daily-Timesheet", null, "Timesheets", "Each worker, each day")
+      ].concat(plant.filter(x => PRESTART[x]).map(x => I(PRESTART[x], "operator_signature", "Prestart: " + x.replace(/ \(.*\)$/, ""), "Before the machine is used each day")),
+        has(/^Excavation/) ? [I("MCK-Safety-TrenchInsp", "inspector_signature", "Excavation and trench inspection", "Before entry each day and after rain")] : []) },
+      { key:"recurring", title:"4. Weekly and monthly inspections", recurring:true, items:[] },
+      { key:"event", title:"5. When it happens (hold points and events)", event:true, items:[].concat(
+        isRR ? [{ holds:true, label:"Council hold points (book on 1300 345 345 at least 48 hours ahead)", why:((window.MCK_PROJ && MCK_PROJ.HOLDS) || RM_HOLDS).join(" · ") },
+                I("MCK-Road-UBP001", "hold_point_signature", "Basecourse ITP (hold point sign-off)", "At each pavement hold point"),
+                I("MCK-Geotech-001", "engineer_signature", "DCP / compaction test report", "Subgrade and base compaction tests")] : [],
+        has(/^Concrete/) || isRR ? [I("MCK-CQ", "approval_signature", "Concrete quality", "Every pour")] : [],
+        has(/^Pipe laying|slinging/) ? [I("MCK-Lift-Plan", "lp_signature", "Lift plan", "Before each new type of lift")] : [],
+        [I("MCK-Hygiene-Record", null, "Machinery hygiene record (weed clean-down)", "Every time a machine, truck or attachment leaves site mid-job"),
+         I("MCK-Competency-Signoff", "cs_assessor_signature", "Competency sign-off", "Before a worker first does a task or uses a machine on their own"),
+         I("MCK-Incident", null, "Incident / hazard report", "Same day as any incident, injury or near miss"),
+         I("MCK-NCR", null, "Non-conformance report (NCR)", "When work does not meet the spec or a hold point fails"),
+         I("MCK-Maint-Log", null, "Maintenance record", "Any breakdown, repair or service on site")]) },
+      { key:"demob", title:"6. Demobilisation: before plant leaves site", due:dt.end, dueLabel:"by the finish date", items:[]
+        .concat(plant.map(x => ({ machine:x, tid:"MCK-Hygiene-Record", label:"Clean-down and hygiene record: " + x.replace(/ \(.*\)$/, ""), why:"Clean, photograph and record before it leaves (African lovegrass)" })))
+        .concat([
+          I("MCK-Demob", "demob_signature", "Machinery demobilisation checklist", "Temporary structures, signs, fencing, waste and plant removed"),
+          I("MCK-WHS-DiLAP", "inspector_signature", "Final dilapidation photos (compare with the start)", "Before leaving site", { nth:2 }),
+          I("MCK-Enviro-Monitor", "monitor_signature", "Final environmental inspection", "Site stabilised, sediment controls and washout removed, no rubbish", { final:true })
+        ]) },
+      { key:"close", title:"7. Close-out and handover", due:dt.end ? dt.end + 7 * DAY : 0, dueLabel:"within a week of finishing", items:[
+        isRR ? { holds:true, label:"Final Council inspection: at completion of all works", why:"Book on 1300 345 345 at least 48 hours ahead" } : null,
+        { ncr:true, label:"All NCRs closed out", why:"Every NCR for the job moved to Closed" },
+        I("MCK-Project-Handover", "mckimm_signature", "Project handover checklist", "Signed by McKimm Civil and the client")
+      ].filter(Boolean) }
+    ];
+  }
+  function rmEval(p, it){
+    const fs = formsForProject(p), job = jobFor(p), na = arr(((job||{}).data||{}).rm_na);
+    const dt = rmDates(p);
+    const signed = (fm, sig) => !sig || sig.some(f => sigOk((fm.data||{})[f]));
+    if (it.tid && na.indexOf(it.tid + (it.machine ? "|" + it.machine : "")) > -1) return { na:true };
+    if (it.crew){
+      const crew = job ? arr((job.data||{}).js_crew) : [];
+      const left = crew.filter(c => gaps(job, c).read.length);
+      return { done: !!(job && crew.length && !left.length), note: job ? (left.length ? left.length + " still to sign: " + left.join(", ") : "") : "needs the Job Start Checklist" };
+    }
+    if (it.holds) return { info:true };
+    if (it.ncr){
+      const open = fs.filter(fm => fm.templateId === "MCK-NCR" && fm.workflowColumn !== "Closed");
+      return { done: !open.length, note: open.length ? open.length + " open" : "" };
+    }
+    if (it.machine){
+      const after = dt.end ? dt.end - 14 * DAY : 0;
+      const f = fs.find(fm => fm.templateId === "MCK-Hygiene-Record" && (fm.data||{}).hy_machine === it.machine && (fm.createdAt||0) >= after);
+      return f ? { done:f } : {};
+    }
+    const pool = [[it.tid, it.sig]].concat(it.alt || []);
+    let hits = fs.filter(fm => pool.some(([t, s]) => fm.templateId === t && signed(fm, s)));
+    if (it.final) hits = dt.end ? hits.filter(fm => (fm.createdAt||0) >= dt.end - 7 * DAY) : [];
+    const n = it.nth || 1;
+    if (hits.length >= n) return { done: hits[hits.length - n], count: hits.length };
+    const draft = fs.find(fm => pool.some(([t]) => fm.templateId === t) && !hits.includes(fm) && !(n > 1 && hits.length));
+    return { draft, count: hits.length };
+  }
+  function rmStatus(r, due){
+    if (r.na) return `<span style="color:${MUTED}">Not needed</span>`;
+    if (r.done) return `<span style="color:${OKC};font-weight:600">✓ Done${r.done.createdAt ? " " + dmy(r.done.createdAt) : ""}</span>`;
+    if (r.draft) return `<span style="color:${WARNC};font-weight:600">Started, not signed</span>`;
+    if (!due) return `<span style="color:${MUTED}">To do</span>`;
+    const days = Math.round((due - todayTs()) / DAY);
+    if (days < 0) return `<span style="color:${BADC};font-weight:600">Overdue (due ${dmy(due)})</span>`;
+    if (days <= 7) return `<span style="color:${WARNC};font-weight:600">Due ${days === 0 ? "today" : dmy(due) + " (" + days + " day" + (days === 1 ? "" : "s") + ")"}</span>`;
+    return `<span style="color:${MUTED}">Due ${dmy(due)}</span>`;
+  }
+  function rmAction(p, it, r){
+    if (it.crew) return a("sign-offs", "nav('training')");
+    if (it.holds) return isRRp(p) ? a("details", "nav('projectinfo')") : "";
+    if (it.ncr) return "";
+    const job = jobFor(p);
+    const naKey = it.tid + (it.machine ? "|" + it.machine : "");
+    const naLink = job && !r.done ? " · " + a(r.na ? "needed" : "not needed", `MCK_JOB.rmNA('${q(p)}','${q(naKey)}')`) : "";
+    if (r.na) return naLink.slice(3);
+    if (r.done && !it.daily) return a("open", `nav('form',{id:'${r.done.templateId}',formId:'${r.done.id}'})`);
+    if (r.draft) return a("finish it", `nav('form',{id:'${r.draft.templateId}',formId:'${r.draft.id}'})`) + naLink;
+    if (it.tid === "MCK-Toolbox-JobStart" && job) return a("start", `MCK_JOB.startToolbox('${job.id}')`) + naLink;
+    if (it.tid === "MCK-Job-Start" && !job){ const pr = Object.keys(PRESETS).find(k => PRESETS[k].data.js_project === p); return a("start", pr ? `MCK_JOB.startPreset('${pr}')` : `MCK_JOB.startForProject('${it.tid}')`); }
+    if (it.machine) return a("start", `MCK_JOB.startHygiene('${q(it.machine)}')`) + naLink;
+    return a("start", `MCK_JOB.startForProject('${it.tid}')`) + naLink;
+  }
+  const isRRp = p => window.MCK_PROJ && p === MCK_PROJ.RR;
+  function rmDaily(p, it){
+    const fs = formsForProject(p), t0 = todayTs();
+    const today = fs.filter(fm => fm.templateId === it.tid && (fm.createdAt||0) >= t0);
+    const done = today.find(fm => !it.sig || it.sig.some(f => sigOk((fm.data||{})[f])));
+    const total = fs.filter(fm => fm.templateId === it.tid).length;
+    return { done, draft: !done && today[0], total };
+  }
+  function rmRecurring(p){
+    if (typeof projectComplianceList !== "function") return [];
+    const st = rmDates(p).start, t0 = todayTs();
+    return projectComplianceList(p).map(i => {
+      if (i.last || !st || st <= t0) return i;
+      let due = st + (i.cadenceDays || 7) * DAY;
+      if (i.weekday){ due = st; while (new Date(due).getDay() !== i.weekday) due += DAY; if (due === st) due += 7 * DAY; }
+      return Object.assign({}, i, { dueTs:due, status:"ok", preStart:true });
+    });
+  }
+  function roadmapSummary(p){
+    const ph = rmPhases(p), out = [];
+    let doneN = 0, totalN = 0;
+    ph.forEach(P => {
+      if (P.daily || P.recurring || P.event) return;
+      P.items.forEach(it => { if (it.holds) return; const r = rmEval(p, it); if (r.na) return; totalN++; if (r.done) doneN++; else out.push({ P, it, r, due:P.due }); });
+    });
+    rmRecurring(p).forEach(i => { if (i.preStart ? i.dueTs - todayTs() <= 7 * DAY : i.status !== "ok" || (i.dueTs && i.dueTs - todayTs() <= 7 * DAY)) out.push({ rec:i, due:i.dueTs }); });
+    out.sort((x, y) => (x.due || 9e15) - (y.due || 9e15));
+    const stage = ph.slice(0, 2).every(P => P.items.every(it => { const r = rmEval(p, it); return r.done || r.na || r.info; })) ? "Ready to work" : (ph[0].items.every(it => { const r = rmEval(p, it); return r.done || r.na; }) ? "Mobilising" : "Planning");
+    return { ph, next: out, doneN, totalN, stage };
+  }
+  function roadmapCard(p, opts){
+    opts = opts || {};
+    const job = jobFor(p), S = roadmapSummary(p), dt = rmDates(p);
+    const pct = S.totalN ? Math.round(100 * S.doneN / S.totalN) : 0;
+    const dateIn = (k, lab, v) => `<label style="font-size:12px;color:${MUTED};display:flex;flex-direction:column;gap:2px">${lab}<input type="date" value="${v ? iso(v) : ""}" ${job ? `onchange="MCK_JOB.rmDate('${q(p)}','${k}',this.value)"` : "disabled"} style="padding:5px 6px;border:1px solid var(--line,#ddd);border-radius:6px;font-size:13px"></label>`;
+    const dates = `<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:6px 0 10px">
+      ${dateIn("js_mob", "Mobilise on site", dt.d.js_mob ? dt.mob : 0)}${dateIn("js_date", "Work starts", dt.start)}${dateIn("js_end", "Planned finish", dt.end)}
+      ${job ? "" : `<span style="font-size:12px;color:${BADC}">Set up the Job Start Checklist first to set dates.</span>`}
+      ${job && !dt.end ? `<span style="font-size:12px;color:${WARNC}">Add the planned finish date so demobilisation items get due dates.</span>` : ""}</div>`;
+    const badge = i => i.preStart ? `<span class="status ok">After work starts</span>` : complianceBadgeHtml(i);
+    const nextRows = S.next.slice(0, 8).map(x => {
+      if (x.rec){ const t = templateById(x.rec.templateId) || {}; return `<tr><td>${esc(t.icon||"🔁")} ${esc(x.rec.label)}</td><td>${badge(x.rec)}${x.rec.dueTs ? ` <span style="font-size:12px;color:${MUTED}">${dmy(x.rec.dueTs)}</span>` : ""}</td><td style="text-align:right">${a("start", `MCK_JOB.startForProject('${x.rec.templateId}')`)}</td></tr>`; }
+      return `<tr><td>${esc(x.it.label)} <span style="font-size:12px;color:${MUTED}">· ${esc(x.P.title.replace(/^\d\. /, "").split(":")[0])}</span></td><td>${rmStatus(x.r, x.due)}</td><td style="text-align:right">${rmAction(p, x.it, x.r)}</td></tr>`;
+    }).join("");
+    const phaseHtml = S.ph.map((P, idx) => {
+      let rows = "", head = "", complete = false;
+      if (P.recurring){
+        const items = rmRecurring(p);
+        rows = items.length ? items.slice().sort((x, y) => (x.dueTs||0) - (y.dueTs||0)).map(i => {
+          const t = templateById(i.templateId) || {};
+          const every = i.weekday ? "Every Friday" : (i.cadenceDays === 7 ? "Weekly" : i.cadenceDays === 28 ? "Every 4 weeks" : i.cadenceDays === 30 ? "Monthly" : "Every " + i.cadenceDays + " days");
+          return `<tr><td>${esc(t.icon||"")} ${esc(i.label)}</td><td style="color:${MUTED}">${every} · last ${i.last ? dmy(i.last.createdAt) : "never"}</td><td>${badge(i)}${i.dueTs ? ` <span style="font-size:12px;color:${MUTED}">${i.preStart ? "first due " : ""}${dmy(i.dueTs)}</span>` : ""}</td><td style="text-align:right">${a("start", `MCK_JOB.startForProject('${i.templateId}')`)}</td></tr>`;
+        }).join("") : `<tr><td colspan="4" style="color:${MUTED}">Turn on the inspections for this job under Compliance → Edit checklist for this project.</td></tr>`;
+        head = `<span style="font-size:12px;color:${MUTED}">from the first Friday after work starts</span>`;
+      } else if (P.daily){
+        const started = dt.start && todayTs() >= dt.start;
+        rows = P.items.map(it => { const r = rmDaily(p, it);
+          const st = !started ? `<span style="color:${MUTED}">From ${dt.start ? dmy(dt.start) : "the start date"}</span>` : (r.done ? `<span style="color:${OKC};font-weight:600">✓ Done today</span>` : r.draft ? `<span style="color:${WARNC};font-weight:600">Started today, not signed</span>` : `<span style="color:${WARNC}">Not done yet today</span>`);
+          return `<tr><td>${esc((templateById(it.tid)||{}).icon||"")} ${esc(it.label)}</td><td style="color:${MUTED}">${esc(it.why)} · ${r.total} done on this job</td><td>${st}</td><td style="text-align:right">${a("start", `MCK_JOB.startForProject('${it.tid}')`)}</td></tr>`; }).join("");
+      } else if (P.event){
+        rows = P.items.map(it => {
+          if (it.holds) return `<tr><td>🛑 ${esc(it.label)}</td><td colspan="2" style="color:${MUTED};font-size:12px">${esc(it.why)}</td><td style="text-align:right">${rmAction(p, it, {})}</td></tr>`;
+          const n = formsForProject(p).filter(fm => fm.templateId === it.tid).length;
+          const extra = it.tid === "MCK-NCR" ? (() => { const o = formsForProject(p).filter(fm => fm.templateId === "MCK-NCR" && fm.workflowColumn !== "Closed").length; return o ? ` · <span style="color:${BADC}">${o} open</span>` : ""; })() : "";
+          return `<tr><td>${esc((templateById(it.tid)||{}).icon||"")} ${esc(it.label)}</td><td style="color:${MUTED}">${esc(it.why)}</td><td><span style="color:${MUTED}">${n} on this job</span>${extra}</td><td style="text-align:right">${a("start", `MCK_JOB.startForProject('${it.tid}')`)}</td></tr>`;
+        }).join("");
+      } else {
+        let dn = 0, tot = 0;
+        rows = P.items.map(it => {
+          const r = rmEval(p, it);
+          if (!r.na && !r.info){ tot++; if (r.done) dn++; }
+          if (it.holds) return `<tr><td>🛑 ${esc(it.label)}</td><td style="color:${MUTED}">${esc(it.why)}</td><td></td><td style="text-align:right">${rmAction(p, it, r)}</td></tr>`;
+          return `<tr><td>${esc(it.tid ? ((templateById(it.tid)||{}).icon||"") : "👷")} ${esc(it.label)}</td><td style="color:${MUTED}">${esc(it.why)}${r.note ? ` · <span style="color:${r.done ? MUTED : BADC}">${esc(r.note)}</span>` : ""}</td><td>${rmStatus(r, P.due)}</td><td style="text-align:right;white-space:nowrap">${rmAction(p, it, r)}</td></tr>`;
+        }).join("");
+        const all = tot && dn === tot; complete = !!all;
+        head = `<span style="font-size:12px;font-weight:600;color:${all ? OKC : MUTED}">${dn} of ${tot} done${P.due ? " · due " + esc(P.dueLabel) + " (" + dmy(P.due) + ")" : " · " + esc(P.dueLabel)}</span>`;
+      }
+      const open = opts.openAll || !complete;
+      return `<details ${open ? "open" : ""} style="border-top:1px solid var(--line,#e5e7eb);padding:8px 0"><summary style="cursor:pointer;display:flex;flex-wrap:wrap;gap:8px;align-items:baseline"><strong style="font-size:14px">${esc(P.title)}</strong>${head}</summary>
+        <div class="list" style="overflow:auto;margin-top:6px"><table><tbody>${rows}</tbody></table></div></details>`;
+    }).join("");
+    return `<div class="card" id="mck-roadmap" style="margin-bottom:14px;padding:14px 16px;border-left:4px solid ${S.stage === "Ready to work" ? OKC : BADC}">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:baseline"><h3 style="margin:0;font-size:17px">🗺 Job roadmap${opts.title ? ": " + esc(p) : ""}</h3><span style="font-size:13px;font-weight:600">${esc(S.stage)} · ${S.doneN} of ${S.totalN} one-off items done</span></div>
+      <div style="height:8px;background:#e5e7eb;border-radius:4px;margin:8px 0 2px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${OKC}"></div></div>
+      ${dates}
+      ${nextRows ? `<div style="margin-bottom:6px"><div style="font-size:12px;font-weight:600;color:${MUTED};text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Coming up next</div><div class="list" style="overflow:auto"><table><tbody>${nextRows}</tbody></table></div></div>` : `<p style="color:${OKC};font-weight:600">Nothing outstanding.</p>`}
+      ${phaseHtml}</div>`;
+  }
+  function rmDate(p, k, v){
+    const job = jobFor(p); if (!job) return;
+    job.data = job.data || {}; job.data[k] = v; job.updatedAt = Date.now(); save(); render();
+  }
+  function rmNA(p, key){
+    const job = jobFor(p); if (!job) return;
+    const l = arr((job.data||{}).rm_na).slice(), i = l.indexOf(key);
+    if (i > -1) l.splice(i, 1); else l.push(key);
+    job.data.rm_na = l; job.updatedAt = Date.now(); save(); render();
+  }
+  function startHygiene(machine){
+    const p = STATE.activeFolder;
+    startForm("MCK-Hygiene-Record", { project:p, hy_machine:machine, hy_date:(typeof todayISO === "function" ? todayISO() : "") });
+  }
+  function roadmapJobs(){
+    const set = [];
+    activeJobs().forEach(j => { const pr = (j.data||{}).js_project; if (pr && set.indexOf(pr) < 0) set.push(pr); });
+    Object.keys(PRESETS).forEach(k => { const pr = PRESETS[k].data.js_project; if (set.indexOf(pr) < 0) set.push(pr); });
+    return set;
+  }
+  function renderRoadmap(m){
+    const jobs = roadmapJobs();
+    let p = STATE.roadmapJob && jobs.indexOf(STATE.roadmapJob) > -1 ? STATE.roadmapJob : (jobs.indexOf(STATE.activeFolder) > -1 ? STATE.activeFolder : jobs[0]);
+    const pick = jobs.map(j => `<button class="btn sm${j === p ? " primary" : ""}" onclick="STATE.roadmapJob=${JSON.stringify(j).replace(/"/g, "&quot;")};save();render()">${esc(j)}</button>`).join(" ");
+    m.innerHTML = `<div style="max-width:1150px"><div class="crumbs"><span>McKimm Civil Pty Ltd</span><span class="sep">›</span><span>Job Roadmap</span></div>
+      <h1 style="margin:0 0 6px">🗺 Job Roadmap</h1>
+      <p style="color:${MUTED};margin:0 0 10px;font-size:14px">Everything that has to be filled in for a job, in the order it happens: planning, mobilisation, every day, weekly inspections, hold points, demobilisation and handover, with what is due next.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${pick || `<span style="color:${MUTED}">No active jobs. Click a job in the left-hand list and set up its Job Start Checklist.</span>`}
+        ${p ? `<button class="btn sm" onclick="STATE.activeFolder=${JSON.stringify(p).replace(/"/g, "&quot;")};save();nav('job')">📁 Open the job page</button>` : ""}</div>
+      ${p ? (STATE.activeFolder = p, roadmapCard(p, { title:true })) : ""}</div>`;
+  }
+  window.CUSTOM_VIEWS = Object.assign(window.CUSTOM_VIEWS || {}, { roadmap: renderRoadmap });
+  (function addRoadmapLink(){
+    try {
+      if (window.MCKIMM_APP !== "pivot") return;
+      const comp = document.querySelector('.subnav-link[data-route="compliance"]');
+      if (!comp || document.querySelector('.subnav-link[data-route="roadmap"]')) return;
+      const el = document.createElement("div");
+      el.className = "subnav-link"; el.dataset.route = "roadmap";
+      el.innerHTML = `<span class="ic">🗺</span> Job Roadmap`;
+      comp.parentNode.insertBefore(el, comp);
+    } catch(e){ console.warn("roadmap link", e); }
+  })();
+
   function renderProject(m){
     const p = STATE.activeFolder || "";
     const job = jobFor(p), signed = job && sigOk((job.data||{}).js_signature);
@@ -711,13 +967,13 @@
         ${job ? `<button class="btn primary" onclick="nav('form',{id:'${tpl.id}',formId:'${job.id}'})">🚩 Job Start Checklist${signed ? "" : " (not signed yet)"}</button><button class="btn primary" onclick="MCK_JOB.startToolbox('${job.id}')">🗣 Job start toolbox talk</button>`
           : (preset ? `<button class="btn primary" onclick="MCK_JOB.startPreset('${preset}')">🚩 Set up ${esc(PRESETS[preset].label)} (Job Start Checklist)</button>` : `<button class="btn primary" onclick="MCK_JOB.startForProject('${tpl.id}')">🚩 New Job Start Checklist</button>`)}
         ${isRR ? `<button class="btn" onclick="nav('projectinfo')">📌 Project Requirements</button>` : ""}
+        <button class="btn" onclick="document.getElementById('mck-roadmap').scrollIntoView({behavior:'smooth'})">🗺 Roadmap</button>
         <button class="btn" onclick="nav('register')">📊 Full register</button>
         <button class="btn" onclick="openAuditPhotoAnalyzer(STATE.activeFolder)">📷 Photo audit (AI)</button>
       </div>
       ${job ? "" : `<div class="notice notice-info" style="margin-bottom:14px">Set up the Job Start Checklist for this job to tailor the forms below to its plant and tasks and to see the crew sign-offs.</div>`}
-      ${beforeCard(p)}
+      ${roadmapCard(p)}
       ${stats}
-      ${inspCard(p)}
       <div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 4px;font-size:16px">Templates for this job</h3><p style="font-size:13px;color:${MUTED};margin:0 0 10px">Tap one to start it with the job already filled in. The number in brackets is how many have been done on this job.</p>${grpHtml}
         <details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">All other templates (${others.length})</summary><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${others.map(t => btn(t.id)).join("")}</div></details></div>
       ${job && signed ? `<div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 8px;font-size:16px">Crew sign-offs for this job</h3>${jobCard(job)}</div>` : ""}
@@ -779,5 +1035,5 @@
     try { if (typeof render === "function") render(); if (typeof updateTopbar === "function") updateTopbar(); } catch(e){}
   });
 
-  window.MCK_JOB = { crewTemplatesFor, beforeStart, PLANT, TASKS, PRESETS, startForProject, formsForProject, jobFor, requirements, gaps, activeJobs, crewCard, jobsCard, startPreset, startToolbox, TEMPLATE_ID:tpl.id, TOOLBOX_ID:tbt.id };
+  window.MCK_JOB = { roadmapCard, roadmapSummary, rmDate, rmNA, startHygiene, crewTemplatesFor, beforeStart, PLANT, TASKS, PRESETS, startForProject, formsForProject, jobFor, requirements, gaps, activeJobs, crewCard, jobsCard, startPreset, startToolbox, TEMPLATE_ID:tpl.id, TOOLBOX_ID:tbt.id };
 })();
