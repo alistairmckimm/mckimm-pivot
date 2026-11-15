@@ -299,5 +299,52 @@
     startForm(tbt.id, { tbj_project:d.js_project, tbj_plant:plant, tbj_docs:docs, tbj_site:d.js_other || "" });
   }
 
-  window.MCK_JOB = { PLANT, TASKS, PRESETS, jobFor, requirements, gaps, activeJobs, crewCard, jobsCard, startPreset, startToolbox, TEMPLATE_ID:tpl.id, TOOLBOX_ID:tbt.id };
+  /* ---------- Project page (click a job in the left-hand list on McKimm Pivot) ---------- */
+  const PF = ["project","project_location","project_name","project_site","site_location","eri_project","heritage_project","js_project","tbj_project","lp_project"];
+  const allF = t => (t.sections||[]).reduce((acc, sec) => acc.concat(sec.fields||[]), []);
+  const projField = t => { const x = allF(t).find(fl => PF.indexOf(fl.id) > -1); return x ? x.id : null; };
+  function formsForProject(p){
+    return forms().filter(fm => { const t = templateById(fm.templateId); const pf = t && projField(t); return (pf && (fm.data||{})[pf] === p) || (!pf && fm.folder === p); })
+      .sort((x, y) => (y.updatedAt||0) - (x.updatedAt||0));
+  }
+  function startForProject(tid){
+    const p = STATE.activeFolder, t = templateById(tid); if (!t) return;
+    const pf = projField(t), pre = {};
+    if (pf) pre[pf] = p;
+    if (tid === "MCK-Daily-Report") pre.report_date = (typeof todayISO === "function" ? todayISO() : "");
+    startForm(tid, pre);
+  }
+  function renderProject(m){
+    const p = STATE.activeFolder || "";
+    const job = jobFor(p), signed = job && sigOk((job.data||{}).js_signature);
+    const preset = Object.keys(PRESETS).find(k => PRESETS[k].data.js_project === p);
+    const isRR = window.MCK_PROJ && p === MCK_PROJ.RR;
+    const fs = formsForProject(p);
+    const recent = fs.slice(0, 40).map(fm => { const t = templateById(fm.templateId) || {}; const title = (fm.data||{})[(t.summary||{}).titleField||""] || ("Form #" + fm.number);
+      return `<tr style="cursor:pointer" onclick="nav('form',{id:'${fm.templateId}',formId:'${fm.id}'})"><td>${esc(t.icon||"")} ${esc(t.name||fm.templateId)}</td><td><strong>${esc(title)}</strong></td><td>${esc(fm.workflowColumn||"")}</td><td>${typeof fmtDateTime === "function" ? fmtDateTime(fm.updatedAt||fm.createdAt) : ""}</td></tr>`; }).join("");
+    const cats = {};
+    TEMPLATES.forEach(t => { if (!projField(t) || /^MCK-(SOP|SWMS|Safety-Ex)/.test(t.id)) return; (cats[t.category||"Other"] = cats[t.category||"Other"] || []).push(t); });
+    const tplHtml = Object.keys(cats).sort().map(c => `<div style="margin:0 0 10px"><div style="font-size:12px;font-weight:600;color:${MUTED};text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">${esc(c)}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${cats[c].map(t => `<button class="btn sm" onclick="MCK_JOB.startForProject('${t.id}')">${esc(t.icon||"")} ${esc(t.name)}</button>`).join("")}</div></div>`).join("");
+    const docs = job ? requirements(job).docs.map(id => `<button class="btn sm" onclick="MCKT.open('${id}')">${esc(((docInfo(id)||{}).title) || (templateById(id)||{}).name || id)}</button>`).join(" ") : "";
+    m.innerHTML = `<div style="max-width:1100px">
+      <div class="crumbs"><span>McKimm Civil Pty Ltd</span><span class="sep">›</span><span>Jobs</span></div>
+      <h1 style="margin:0 0 10px">📁 ${esc(p)}</h1>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        ${job ? `<button class="btn primary" onclick="nav('form',{id:'${tpl.id}',formId:'${job.id}'})">🚩 Job Start Checklist${signed ? "" : " (not signed yet)"}</button><button class="btn primary" onclick="MCK_JOB.startToolbox('${job.id}')">🗣 Job start toolbox talk</button>`
+          : (preset ? `<button class="btn primary" onclick="MCK_JOB.startPreset('${preset}')">🚩 Set up ${esc(PRESETS[preset].label)} (Job Start Checklist)</button>` : `<button class="btn primary" onclick="MCK_JOB.startForProject('${tpl.id}')">🚩 New Job Start Checklist</button>`)}
+        <button class="btn" onclick="MCK_JOB.startForProject('MCK-Daily-Report')">📋 Daily Report</button>
+        ${isRR ? `<button class="btn" onclick="nav('projectinfo')">📌 Project Requirements</button>` : ""}
+        <button class="btn" onclick="nav('register')">📊 Register for this job</button>
+      </div>
+      ${job && signed ? `<div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 8px;font-size:16px">Crew sign-offs for this job</h3>${jobCard(job)}</div>` : ""}
+      ${docs ? `<div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 8px;font-size:16px">SOPs and SWMS for this job</h3><div style="display:flex;flex-wrap:wrap;gap:6px">${docs}</div></div>` : ""}
+      <div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 8px;font-size:16px">Forms for this job (${fs.length})</h3>
+        ${fs.length ? `<div class="list" style="overflow:auto"><table><thead><tr><th>Template</th><th>Title</th><th>Status</th><th>Updated</th></tr></thead><tbody>${recent}</tbody></table></div>` : `<span style="color:${MUTED}">No forms for this job yet.</span>`}</div>
+      <div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 8px;font-size:16px">Start a form for this job</h3><p style="font-size:13px;color:${MUTED};margin:0 0 10px">The job is filled in for you.</p>${tplHtml}</div>
+    </div>`;
+  }
+  window.CUSTOM_VIEWS = Object.assign(window.CUSTOM_VIEWS || {}, { job: renderProject });
+  if (typeof filterByFolder === "function") window.filterByFolder = function(path){ STATE.activeFolder = path; save(); nav("job"); };
+
+  window.MCK_JOB = { PLANT, TASKS, PRESETS, startForProject, formsForProject, jobFor, requirements, gaps, activeJobs, crewCard, jobsCard, startPreset, startToolbox, TEMPLATE_ID:tpl.id, TOOLBOX_ID:tbt.id };
 })();
