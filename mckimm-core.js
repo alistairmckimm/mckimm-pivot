@@ -115,13 +115,27 @@ const WEATHER = ["Fine","Overcast","Rain","Wind","Heat","Snow","Frost/Ice"];
 const ARCHIVED_PROJECTS = [];
 let PROJECT_COMPLIANCE_CONFIG = {};
 const TEAM_CONFIG_CACHE_KEY = "mckimm-team-config-v1";
+const TEAM_CONFIG_DIRTY_KEY = "mckimm-team-config-dirty-v1";
 let TEAM_CONFIG_DIRTY = false;
+try { TEAM_CONFIG_DIRTY = localStorage.getItem(TEAM_CONFIG_DIRTY_KEY) === "1"; } catch(e){}
+/* Fix 15 Nov 2026: job/user edits (archive, add, restore) used to live in memory only, and every page load
+   replaced them with the published team-config.json (an empty {} until someone clicks "Publish changes to team"),
+   so archived jobs kept coming back. Edits are now saved on this device straight away, and an unpublished local
+   edit is never overwritten by the file on GitHub. Publishing clears the flag. */
+function persistTeamConfig(){
+  try {
+    localStorage.setItem(TEAM_CONFIG_CACHE_KEY, JSON.stringify(currentTeamConfig()));
+    localStorage.setItem(TEAM_CONFIG_DIRTY_KEY, "1");
+  } catch(e){}
+}
 function applyTeamConfig(cfg){
   if (!cfg) return;
   if (Array.isArray(cfg.users) && cfg.users.length) USERS.splice(0, USERS.length, ...cfg.users);
   if (Array.isArray(cfg.projects) && cfg.projects.length) PROJECT_LOCATIONS.splice(0, PROJECT_LOCATIONS.length, ...cfg.projects);
-  ARCHIVED_PROJECTS.splice(0, ARCHIVED_PROJECTS.length, ...(Array.isArray(cfg.archivedProjects)?cfg.archivedProjects:[]));
-  PROJECT_COMPLIANCE_CONFIG = (cfg.projectCompliance && typeof cfg.projectCompliance==="object") ? cfg.projectCompliance : {};
+  if (Array.isArray(cfg.archivedProjects)) ARCHIVED_PROJECTS.splice(0, ARCHIVED_PROJECTS.length, ...cfg.archivedProjects);
+  // an archived job never stays on the active list
+  ARCHIVED_PROJECTS.forEach(a => { const i = PROJECT_LOCATIONS.indexOf(a); if (i > -1) PROJECT_LOCATIONS.splice(i, 1); });
+  if (cfg.projectCompliance && typeof cfg.projectCompliance==="object") PROJECT_COMPLIANCE_CONFIG = cfg.projectCompliance;
 }
 try { applyTeamConfig(JSON.parse(localStorage.getItem(TEAM_CONFIG_CACHE_KEY) || "null")); } catch(e){}
 
@@ -3367,7 +3381,9 @@ async function loadTeamConfig(){
   try {
     const r = await fetch("./team-config.json", { cache:"no-store" });
     if (r.ok){
-      applyTeamConfig(await r.json());
+      const remote = await r.json();
+      if (TEAM_CONFIG_DIRTY) return;   // keep this device's unpublished job/user edits
+      applyTeamConfig(remote);
       localStorage.setItem(TEAM_CONFIG_CACHE_KEY, JSON.stringify(currentTeamConfig()));
       if (typeof render === "function") render();
       if (typeof updateTopbar === "function") updateTopbar();
@@ -3397,6 +3413,7 @@ async function publishTeamConfig(){
     });
     if (putRes.ok){
       TEAM_CONFIG_DIRTY = false;
+      try { localStorage.setItem(TEAM_CONFIG_CACHE_KEY, JSON.stringify(currentTeamConfig())); localStorage.removeItem(TEAM_CONFIG_DIRTY_KEY); } catch(e){}
       return true;
     }
     const err = await putRes.json().catch(()=>({}));
@@ -3512,7 +3529,7 @@ function saveNewJob(){
   if (PROJECT_LOCATIONS.includes(name)){ toast("That job already exists"); return; }
   const otherIdx = PROJECT_LOCATIONS.indexOf("Other (see comments)");
   if (otherIdx>-1) PROJECT_LOCATIONS.splice(otherIdx,0,name); else PROJECT_LOCATIONS.push(name);
-  TEAM_CONFIG_DIRTY = true;
+  TEAM_CONFIG_DIRTY = true; persistTeamConfig();
   closeModal(); renderFolders(); render();
   toast(`Job added \u2014 click "Publish changes to team" on the Users page to push it live`);
 }
@@ -3521,7 +3538,7 @@ function archiveJob(name){
   const idx = PROJECT_LOCATIONS.indexOf(name);
   if (idx>-1) PROJECT_LOCATIONS.splice(idx,1);
   if (!ARCHIVED_PROJECTS.includes(name)) ARCHIVED_PROJECTS.push(name);
-  TEAM_CONFIG_DIRTY = true;
+  TEAM_CONFIG_DIRTY = true; persistTeamConfig();
   renderFolders();
   toast(`Archived \u2014 click "Publish changes to team" on the Users page to push it live`);
 }
@@ -3532,7 +3549,7 @@ function restoreJob(name){
     const otherIdx = PROJECT_LOCATIONS.indexOf("Other (see comments)");
     if (otherIdx>-1) PROJECT_LOCATIONS.splice(otherIdx,0,name); else PROJECT_LOCATIONS.push(name);
   }
-  TEAM_CONFIG_DIRTY = true;
+  TEAM_CONFIG_DIRTY = true; persistTeamConfig();
   renderFolders();
   toast(`Restored \u2014 click "Publish changes to team" on the Users page to push it live`);
 }
@@ -3901,7 +3918,7 @@ function openProjectComplianceEditor(projectValue){
 function saveProjectCompliance(projectValue){
   const keys = [...document.querySelectorAll(".pc-item:checked")].map(el=>el.value);
   PROJECT_COMPLIANCE_CONFIG[projectValue] = keys;
-  TEAM_CONFIG_DIRTY = true;
+  TEAM_CONFIG_DIRTY = true; persistTeamConfig();
   closeModal(); render();
   toast(`Saved \\u2014 click "Publish changes to team" on the Users page to push it live`);
 }
@@ -4573,7 +4590,7 @@ function saveNewUser(){
   if (!name) return;
   if (USERS.includes(name)){ toast("That user already exists"); return; }
   USERS.push(name);
-  TEAM_CONFIG_DIRTY = true;
+  TEAM_CONFIG_DIRTY = true; persistTeamConfig();
   closeModal(); render();
   toast(`Added \u2014 click "Publish changes to team" to push it live`);
 }
@@ -4582,7 +4599,7 @@ function removeUser(name){
   const idx = USERS.indexOf(name);
   if (idx>-1) USERS.splice(idx,1);
   delete OPERATOR_CONFIG[name];
-  TEAM_CONFIG_DIRTY = true;
+  TEAM_CONFIG_DIRTY = true; persistTeamConfig();
   OPERATOR_CONFIG_DIRTY = true;
   localStorage.setItem(OPERATOR_CONFIG_CACHE_KEY, JSON.stringify(OPERATOR_CONFIG));
   render();

@@ -19,7 +19,9 @@
   const RR_ADDR = "Rockwell Road, Berridale (road reserve adjoining Lot 5 DP1294499)";
 
   /* ---- Seed the project and the two new crew members (code seeds: team-config.json would REPLACE the lists) ---- */
-  if (PROJECT_LOCATIONS.indexOf(RR) < 0) PROJECT_LOCATIONS.unshift(RR);
+  /* a seeded job is added only if it is missing and has not been archived */
+  const NSTC = "NSTC";
+  [RR, NSTC].forEach(j => { if (PROJECT_LOCATIONS.indexOf(j) < 0 && ARCHIVED_PROJECTS.indexOf(j) < 0) PROJECT_LOCATIONS.unshift(j); });
   ["Simon Story","William Westaway"].forEach(n => { if (USERS.indexOf(n) < 0) USERS.push(n); });
 
   /* ---- Locate report (LiveLocates LL260383) ---- */
@@ -156,8 +158,7 @@
   }
 
   window.MCK_PROJ = {
-    RR, LOCATE, locateStatus, CREW_DOCS, CREW, HOLDS,
-    get RR_TEMPLATES(){ return Object.keys(D); },
+    RR, LOCATE, locateStatus, CREW_DOCS, CREW,
     /* called by createForm(): tokens (e.g. employee/date on SOPs), then project defaults */
     onCreate(form, t){
       if (t.prefillDefaults) Object.keys(t.prefillDefaults).forEach(k => { if (isEmpty(form.data[k])) form.data[k] = resolve(t.prefillDefaults[k]); });
