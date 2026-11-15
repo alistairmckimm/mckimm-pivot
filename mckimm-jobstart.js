@@ -976,6 +976,7 @@
           : (preset ? `<button class="btn primary" onclick="MCK_JOB.startPreset('${preset}')">🚩 Set up ${esc(PRESETS[preset].label)} (Job Start Checklist)</button>` : `<button class="btn primary" onclick="MCK_JOB.startForProject('${tpl.id}')">🚩 New Job Start Checklist</button>`)}
         ${isRR ? `<button class="btn" onclick="nav('projectinfo')">📌 Project Requirements</button>` : ""}
         <button class="btn" onclick="document.getElementById('mck-roadmap').scrollIntoView({behavior:'smooth'})">🗺 Roadmap</button>
+        <button class="btn" onclick="STATE.programJob=STATE.activeFolder;save();nav('program')">📅 Program</button>
         <button class="btn" onclick="nav('register')">📊 Full register</button>
         <button class="btn" onclick="openAuditPhotoAnalyzer(STATE.activeFolder)">📷 Photo audit (AI)</button>
       </div>
