@@ -595,7 +595,7 @@
       if (doneThisWeek){ dueTs = fri + 7 * DAY; daysLeft = Math.round((dueTs - today.getTime()) / DAY); status = "ok"; }
       else {
         const js = jobFor(projectValue), jsDate = js && (js.data||{}).js_date ? new Date(js.data.js_date + "T00:00:00").getTime() : 0;
-        if (!last && jsDate > fri){   // job started after this week's Friday: first one due next Friday
+        if (!last && (jsDate > fri || today.getTime() > fri)){   // first one: due the next Friday that hasn't passed
           dueTs = fri + 7 * DAY; daysLeft = Math.round((dueTs - today.getTime()) / DAY);
           return Object.assign({}, item, { projectValue, last, dueTs, daysLeft, status: daysLeft <= 0 ? "soon" : "ok", weekly:true, doneThisWeek:false });
         }
@@ -620,8 +620,8 @@
     const origList = projectComplianceList;
     window.projectComplianceList = function(p){
       const configured = (typeof PROJECT_COMPLIANCE_CONFIG !== "undefined") && Array.isArray(PROJECT_COMPLIANCE_CONFIG[p]);
-      const j = jobFor(p);
-      if (!configured && !(j && sigOk((j.data||{}).js_signature))) return [];
+      const hasPreset = Object.keys(PRESETS).some(k => PRESETS[k].data.js_project === p);
+      if (!configured && !jobFor(p) && !hasPreset) return [];
       return origList(p);
     };
   }
@@ -657,9 +657,25 @@
       ["Quality and hold points", ["MCK-NCR", "MCK-CAR"].concat(rrT.filter(x => /Road-UBP|Geotech/.test(x)), has("Concrete mixing bucket") ? ["MCK-CQ"] : [])],
       ["Environment", ["MCK-Eco-Internal", "MCK-Eco-ThirdParty", "MCK-Enviro-SiteRisk", "MCK-Enviro-Monitor", "MCK-Enviro-Heritage"].concat(tasks.some(x => /^Weed hygiene/.test(x)) ? ["MCK-Hygiene-Record"] : [])],
       ["Training, sign-offs and plant", ["MCK-Training-Record", "MCK-Competency-Signoff", "MCK-Maint-Log"]],
+      ["Regular site checks", TEMPLATES.filter(t => t.category === "Site Maintenance").map(t => t.id)],
       ["Finishing the job", ["MCK-Demob", "MCK-Project-Handover"]]
     ];
     return G.map(([g, ids]) => [g, ids.filter((x, i) => ids.indexOf(x) === i && templateById(x))]);
+  }
+  function inspCard(p){
+    if (typeof projectComplianceList !== "function") return "";
+    const items = projectComplianceList(p);
+    if (!items.length) return "";
+    const rank = { overdue:0, never:1, soon:2, ok:3 };
+    const rows = items.slice().sort((x, y) => (rank[x.status] - rank[y.status]) || (x.dueTs - y.dueTs)).map(i => {
+      const t = templateById(i.templateId) || {};
+      const every = i.weekday ? "Weekly, every Friday" : (i.cadenceDays % 7 === 0 && i.cadenceDays < 60 ? (i.cadenceDays === 7 ? "Weekly" : "Every " + (i.cadenceDays / 7) + " weeks") : (typeof cadenceLabel === "function" ? "Every " + cadenceLabel(i.cadenceDays) : i.cadenceDays + " days"));
+      const last = i.last ? (typeof fmtDate === "function" ? fmtDate(i.last.createdAt) : "") : "never";
+      return `<tr><td>${esc(t.icon||"")} ${esc(i.label)}</td><td>${esc(every)}</td><td>${esc(last)}</td><td>${complianceBadgeHtml(i)}</td><td style="text-align:right">${a("start", `MCK_JOB.startForProject('${i.templateId}')`)}</td></tr>`;
+    }).join("");
+    return `<div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 4px;font-size:16px">Inspections and when they are due</h3>
+      <p style="font-size:13px;color:${MUTED};margin:0 0 8px">Regular checks for this job once it is running. Untick any that do not apply under Compliance → Edit checklist for this project.</p>
+      <div class="list" style="overflow:auto"><table><thead><tr><th>Inspection</th><th>How often</th><th>Last done</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
   function renderProject(m){
     const p = STATE.activeFolder || "";
@@ -699,8 +715,9 @@
         <button class="btn" onclick="openAuditPhotoAnalyzer(STATE.activeFolder)">📷 Photo audit (AI)</button>
       </div>
       ${job ? "" : `<div class="notice notice-info" style="margin-bottom:14px">Set up the Job Start Checklist for this job to tailor the forms below to its plant and tasks and to see the crew sign-offs.</div>`}
-      ${job ? beforeCard(p) : ""}
+      ${beforeCard(p)}
       ${stats}
+      ${inspCard(p)}
       <div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 4px;font-size:16px">Templates for this job</h3><p style="font-size:13px;color:${MUTED};margin:0 0 10px">Tap one to start it with the job already filled in. The number in brackets is how many have been done on this job.</p>${grpHtml}
         <details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">All other templates (${others.length})</summary><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${others.map(t => btn(t.id)).join("")}</div></details></div>
       ${job && signed ? `<div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 8px;font-size:16px">Crew sign-offs for this job</h3>${jobCard(job)}</div>` : ""}
@@ -712,5 +729,55 @@
   window.CUSTOM_VIEWS = Object.assign(window.CUSTOM_VIEWS || {}, { job: renderProject });
   if (typeof filterByFolder === "function") window.filterByFolder = function(path){ STATE.activeFolder = path; save(); nav("job"); };
 
-  window.MCK_JOB = { beforeStart, PLANT, TASKS, PRESETS, startForProject, formsForProject, jobFor, requirements, gaps, activeJobs, crewCard, jobsCard, startPreset, startToolbox, TEMPLATE_ID:tpl.id, TOOLBOX_ID:tbt.id };
+  /* ---------- Access: only Al has full access; crew see what applies to their job ---------- */
+  const OWNER = "Alistair McKimm";
+  if (typeof hasFullAccess === "function"){
+    window.hasFullAccess = function(userName){
+      const c = (typeof OPERATOR_CONFIG !== "undefined") ? OPERATOR_CONFIG[userName] : null;
+      if (c) return c.fullAccess === true;
+      return userName === OWNER;            // anyone not set up on the Users page is restricted
+    };
+  }
+  const DOC_RE = /^MCK-(SOP-|SWMS-|Safety-Excavation$|Enviro-Decontaminate$)/;
+  const CREW_FORMS_ALWAYS = ["MCK-Daily-Report", "MCK-Maint-Log", "MCK-Incident"];
+  function crewJobsFor(u){
+    return activeJobs().filter(j => arr((j.data||{}).js_crew).includes(u));
+  }
+  function crewTemplatesFor(u, p, base){
+    const job = jobFor(p);
+    if (!job || !sigOk((job.data||{}).js_signature) || !arr((job.data||{}).js_crew).includes(u)) return base;
+    const d = job.data || {}, tasks = arr(d.js_tasks);
+    const r = requirements(job);
+    const ids = CREW_FORMS_ALWAYS.slice();
+    if ((base||[]).includes("MCK-Daily-Timesheet")) ids.push("MCK-Daily-Timesheet");
+    arr(d.js_plant).forEach(x => { if (PRESTART[x]) ids.push(PRESTART[x]); });
+    if (tasks.includes("Excavation and trenching")) ids.push("MCK-Safety-TrenchInsp");
+    if (tasks.some(x => /^Weed hygiene/.test(x))) ids.push("MCK-Hygiene-Record");
+    TEMPLATES.filter(t => t.category === "Site Maintenance").forEach(t => ids.push(t.id));
+    (base||[]).forEach(id => { if (!DOC_RE.test(id)) ids.push(id); });       // keep the other forms Al gave them
+    r.docs.forEach(id => ids.push(id));                                         // only the SOPs/SWMS this job needs
+    return ids.filter((x, i) => ids.indexOf(x) === i && templateById(x));
+  }
+  document.addEventListener("DOMContentLoaded", () => {
+    if (typeof fieldTemplatesFor === "function"){
+      const origT = fieldTemplatesFor;
+      window.fieldTemplatesFor = function(u){
+        const base = origT(u);
+        if (base === null) return null;                                         // full access
+        return crewTemplatesFor(u, STATE.fieldProject, base);
+      };
+    }
+    if (typeof fieldProjectOptionsFor === "function"){
+      const origP = fieldProjectOptionsFor;
+      window.fieldProjectOptionsFor = function(u){
+        const list = origP(u).slice();
+        if (typeof hasFullAccess === "function" && hasFullAccess(u)) return list;
+        crewJobsFor(u).forEach(j => { const pr = (j.data||{}).js_project; if (pr && !list.includes(pr)) list.push(pr); });
+        return list;
+      };
+    }
+    try { if (typeof render === "function") render(); if (typeof updateTopbar === "function") updateTopbar(); } catch(e){}
+  });
+
+  window.MCK_JOB = { crewTemplatesFor, beforeStart, PLANT, TASKS, PRESETS, startForProject, formsForProject, jobFor, requirements, gaps, activeJobs, crewCard, jobsCard, startPreset, startToolbox, TEMPLATE_ID:tpl.id, TOOLBOX_ID:tbt.id };
 })();

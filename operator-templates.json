@@ -111,5 +111,90 @@
       "MCK-Site-Access"
     ],
     "fullAccess": false
+  },
+  "Ashley Leatherland": {
+    "projects": [],
+    "templates": [
+      "MCK-Daily-Timesheet",
+      "MCK-Daily-Report",
+      "MCK-Maint-Log",
+      "MCK-Incident"
+    ],
+    "fullAccess": false
+  },
+  "Damo McLachlan": {
+    "projects": [],
+    "templates": [
+      "MCK-Daily-Timesheet",
+      "MCK-Daily-Report",
+      "MCK-Maint-Log",
+      "MCK-Incident"
+    ],
+    "fullAccess": false
+  },
+  "Jason Bothur": {
+    "projects": [],
+    "templates": [
+      "MCK-Daily-Timesheet",
+      "MCK-Daily-Report",
+      "MCK-Maint-Log",
+      "MCK-Incident"
+    ],
+    "fullAccess": false
+  },
+  "Jock Woodhouse": {
+    "projects": [],
+    "templates": [
+      "MCK-Daily-Timesheet",
+      "MCK-Daily-Report",
+      "MCK-Maint-Log",
+      "MCK-Incident"
+    ],
+    "fullAccess": false
+  },
+  "John Killen": {
+    "projects": [],
+    "templates": [
+      "MCK-Daily-Timesheet",
+      "MCK-Daily-Report",
+      "MCK-Maint-Log",
+      "MCK-Incident"
+    ],
+    "fullAccess": false
+  },
+  "Luke Williams": {
+    "projects": [],
+    "templates": [
+      "MCK-Daily-Timesheet",
+      "MCK-Daily-Report",
+      "MCK-Maint-Log",
+      "MCK-Incident"
+    ],
+    "fullAccess": false
+  },
+  "Steve Ibbotson": {
+    "projects": [],
+    "templates": [
+      "MCK-Daily-Timesheet",
+      "MCK-Daily-Report",
+      "MCK-Maint-Log",
+      "MCK-Incident"
+    ],
+    "fullAccess": false
+  },
+  "Steven Carter": {
+    "projects": [],
+    "templates": [
+      "MCK-Daily-Timesheet",
+      "MCK-Daily-Report",
+      "MCK-Maint-Log",
+      "MCK-Incident"
+    ],
+    "fullAccess": false
+  },
+  "Alistair McKimm": {
+    "projects": [],
+    "templates": [],
+    "fullAccess": true
   }
 }
