@@ -54,6 +54,7 @@
     ["Refuelling on site", ["MCK-SOP-FUEL-01"], ["Refuelling and spill response"]],
     ["Hazardous chemicals", ["MCK-SOP-CHEM-01"], []],
     ["Erosion and sediment control, washdown", ["MCK-SOP-ESC-01"], []],
+    ["Weed hygiene: clean down plant before it leaves (weeds such as African lovegrass on site)", ["MCK-SOP-HYGIENE-01", "MCK-Enviro-Decontaminate"], ["Machinery weed hygiene and clean-down"]],
     ["Ladders or working at heights", ["MCK-SOP-HEIGHTS-01"], ["Ladders and working at heights"]],
     ["Pits, tanks or other possible confined spaces nearby", ["MCK-SOP-CONFINED-01"], []],
     ["Workshop: hot work, grinding, tyres", ["MCK-SOP-WKSHOP-01"], ["Workshop hot work, grinding and tyre changing"]],
@@ -72,8 +73,8 @@
       js_project: RR,
       js_crew: ["Alistair McKimm", "Simon Story", "William Westaway"],
       js_plant: ["Komatsu PC200-8 excavator (20 t)", "Wacker Neuson 38Z3 excavator (4 t)", "Sunward SWE17 mini excavator", "Sunward SWL2810 skid steer", "Wacker Neuson RT82 roller", "Mitsubishi MG100 grader"],
-      js_tasks: ["Excavation and trenching", "Underground services and potholing", "Pipe laying and headwalls with the excavator bucket (no lifting gear)", "Excavator quick hitch and attachment changes", "Concrete mixing bucket", "Refuelling on site", "Erosion and sediment control, washdown"],
-      js_other: "S138 consent 138.2024.76.1: Council engineer hold points (book 48 h ahead on 1300 345 345). Approved TGS: set up signs to the plan; nobody directs or stops traffic. Services: LiveLocates LL260383, Telstra potholed July 2026, re-check and stop if anything new turns up. Trenches no deeper than 1.5 m. No lifting gear: 450 mm RCP rolled and pushed with the 20 t bucket; precast headwalls placed with a narrow bucket through the hole; 300 mm SN8 pipes by two people. First aider: Al. Meeting point: site office (first aid kit, extinguisher). Nearest hospital: Cooma."
+      js_tasks: ["Excavation and trenching", "Underground services and potholing", "Pipe laying and headwalls with the excavator bucket (no lifting gear)", "Excavator quick hitch and attachment changes", "Concrete mixing bucket", "Refuelling on site", "Erosion and sediment control, washdown", "Weed hygiene: clean down plant before it leaves (weeds such as African lovegrass on site)"],
+      js_other: "S138 consent 138.2024.76.1: Council engineer hold points (book 48 h ahead on 1300 345 345). Approved TGS: set up signs to the plan; nobody directs or stops traffic. Services: LiveLocates LL260383, Telstra potholed July 2026, re-check and stop if anything new turns up. Trenches no deeper than 1.5 m. No lifting gear: 450 mm RCP rolled and pushed with the 20 t bucket; precast headwalls placed with a narrow bucket through the hole; 300 mm SN8 pipes by two people. First aider: Al. Meeting point: site office (first aid kit, extinguisher). Nearest hospital: Cooma. African lovegrass on the property: every machine, truck and trailer is cleaned down and recorded on the Machinery Hygiene Record before it leaves site; Supervisor sign-off before going to any sensitive area."
     } }
   };
 
@@ -139,7 +140,7 @@
   }
   function readOk(tid, p){
     const t = templateById(tid);
-    const mine = forms().filter(f => f.templateId === tid && (f.data||{}).employee === p && sigOk((f.data||{}).acknowledge_signature)).sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
+    const mine = forms().filter(f => f.templateId === tid && ((f.data||{}).employee === p || (((f.data||{}).acknowledge_signature)||{}).by === p) && sigOk((f.data||{}).acknowledge_signature)).sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
     if (!mine.length) return "none";
     const ver = mine[0].templateVersion || "";
     return (t && t.version && ver && ver !== t.version) ? "old" : "ok";
@@ -231,7 +232,8 @@
       try {
         const full = (typeof hasFullAccess !== "function") || hasFullAccess(STATE.currentUser);
         const f = full ? flagCount() : { n:0 };
-        if (f.n) extra = `<div class="notice notice-warning" style="margin-bottom:12px;cursor:pointer" onclick="nav('training')"><h3>🚩 ${f.n} job sign-off${f.n === 1 ? "" : "s"} missing — tap to review</h3><div style="font-size:13px">${esc(f.who.slice(0, 6).join(" · "))}${f.who.length > 6 ? " …" : ""}</div></div>`;
+        if (full) activeJobs().forEach(jb => { const pr = (jb.data||{}).js_project, b = beforeStart(pr); if (b.n < b.total) extra += `<div class="notice notice-danger" style="margin-bottom:12px;cursor:pointer" onclick="STATE.activeFolder=${JSON.stringify(pr).replace(/"/g,"&quot;")};save();nav('job')"><h3>🏗 ${esc(pr)}: ${b.n} of ${b.total} before-start items done — tap to finish</h3><div style="font-size:13px">${esc(b.items.filter(i => !i.done).map(i => i.label.replace(/ \(.*\)$/, "")).slice(0, 6).join(" · "))}</div></div>`; });
+        if (f.n) extra += `<div class="notice notice-warning" style="margin-bottom:12px;cursor:pointer" onclick="nav('training')"><h3>🚩 ${f.n} job sign-off${f.n === 1 ? "" : "s"} missing — tap to review</h3><div style="font-size:13px">${esc(f.who.slice(0, 6).join(" · "))}${f.who.length > 6 ? " …" : ""}</div></div>`;
       } catch(e){ console.warn("job flags", e); }
       return extra + origBanner();
     };
@@ -299,6 +301,331 @@
     startForm(tbt.id, { tbj_project:d.js_project, tbj_plant:plant, tbj_docs:docs, tbj_site:d.js_other || "" });
   }
 
+  /* ---------- Machinery Hygiene Record (MCK-Hygiene-Record v1) ---------- */
+  const hyg = {
+    id:"MCK-Hygiene-Record", name:"Machinery Hygiene Record (weed clean-down)", category:"Environment (ISO 14001)",
+    code:"MCK-Hygiene-Record", version:"v1", icon:"🌾",
+    workflow:{ type:"linear", columns:["Cleaned","Released"], default:"Cleaned" },
+    instructions:"Fill this in for every machine, truck, trailer or attachment leaving a site with priority weeds (such as African lovegrass), following SOP MCK-SOP-HYGIENE-01. Take a photo before and after cleaning. If it is going to a sensitive area, the Supervisor must inspect it and sign before it leaves.",
+    summary:{ titleField:"hy_machine", subField:"hy_date", tagField:"hy_dest_type" },
+    prefillDefaults:{ hy_by:"@user", hy_date:"@today" },
+    sections:[
+      {id:"what", title:"Machine and move", fields:[
+        {id:"project", label:"Leaving site (project)", type:"select", options:PROJECT_LOCATIONS, required:true},
+        {id:"hy_date", label:"Date", type:"date", required:true},
+        {id:"hy_by", label:"Cleaned by", type:"select", options:USERS, required:true},
+        {id:"hy_machine", label:"Machine, vehicle or attachment", type:"select", options:PLANT.map(x => x[0]).concat(["Toyota Hilux ute","Tandem trailer","Plant float","Attachment (say which below)","Other (say which below)"]), required:true},
+        {id:"hy_machine_other", label:"Details (asset ID, attachment, rego)", type:"text"},
+        {id:"hy_dest", label:"Going to", type:"text", required:true},
+        {id:"hy_dest_type", label:"Destination", type:"chips", options:["Sensitive area (park, waterway, clean farm, Council or client requirement)","Another work site","Depot"], required:true, affectsVisibility:true},
+        {id:"hy_weeds", label:"Weeds on the site being left", type:"chips", options:["African lovegrass","Serrated tussock","Blackberry","Other (note below)","None known"]}
+      ]},
+      {id:"clean", title:"Cleaning", fields:[
+        {id:"hy_before", label:"Photos before cleaning", type:"photos"},
+        {id:"hy_method", label:"How it was cleaned (tick all)", type:"chips", options:["Scraped and brushed","Compressed air blow-down","Pressure washed","Tracks rotated and both sides cleaned","Belly plates or guards opened","Cab mats, floor and pedals cleaned","Attachments, toolboxes and tools cleaned","Boots and clothing brushed down"], required:true},
+        {id:"hy_where", label:"Cleaned at the site clean-down area, with material left on the infested site and nothing into drains or waterways", type:"chips", options:["Yes","No (explain below)"], required:true},
+        {id:"hy_hotspots", label:"Hot spots checked and clean (tick each)", type:"chips", options:["Tracks, idlers, rollers, track frame","Belly plates, guards, frame rails","Radiator, grilles, air intakes","Buckets, hitch, rams, linkages","Cab floor, pedals, mats, steps","Tyres, treads, arches, mud flaps, chassis","Decks, trays, tailgates, toolboxes"], required:true},
+        {id:"hy_after", label:"Photos after cleaning", type:"photos", required:true},
+        {id:"hy_notes", label:"Notes", type:"textarea", voice:true, voiceHint:"Say how you cleaned it and anything that could not be cleaned."}
+      ]},
+      {id:"release", title:"Release", fields:[
+        {id:"hy_op_sig", label:"Operator: I have cleaned and inspected this machine to SOP MCK-SOP-HYGIENE-01 and it is free of visible soil, seed and plant material", type:"signature", required:true},
+        {id:"hy_sup_note", label:"", type:"notice", variant:"warning", showIf:{field:"hy_dest_type", includes:"Sensitive area"}, html:"<p><strong>Going to a sensitive area:</strong> the Supervisor must inspect the machine and sign below before it leaves site.</p>"},
+        {id:"hy_sup_sig", label:"Supervisor: inspected and released", type:"signature", showIf:{field:"hy_dest_type", includes:"Sensitive area"}}
+      ]}
+    ]
+  };
+  const hi = TEMPLATES.findIndex(x => x.id === hyg.id);
+  if (hi > -1) TEMPLATES[hi] = hyg; else TEMPLATES.push(hyg);
+
+  /* ---------- Site Mobilisation Checklist (MCK-Mobilisation v1) ---------- */
+  const YNA = ["Yes","No","Not needed"];
+  const mob = {
+    id:"MCK-Mobilisation", name:"Site Mobilisation Checklist", category:"Site Mobilisation",
+    code:"MCK-Mobilisation", version:"v1", icon:"🏗",
+    workflow:{ type:"linear", columns:["In progress","Ready to start"], default:"In progress" },
+    instructions:"Complete before work starts on site. Every item must be Yes or Not needed before you sign. Any No: fix it, or record what will be done and by when.",
+    summary:{ titleField:"project", subField:"mob_date", tagField:"mob_ready" },
+    prefillDefaults:{ mob_by:"@user", mob_date:"@today" },
+    sections:[
+      {id:"who", title:"Job", fields:[
+        {id:"project", label:"Project / Location", type:"select", options:PROJECT_LOCATIONS, required:true},
+        {id:"mob_date", label:"Date", type:"date", required:true},
+        {id:"mob_by", label:"Checked by", type:"select", options:USERS, required:true}
+      ]},
+      {id:"approvals", title:"Approvals, notices and documents", fields:[
+        {id:"mob_consent", label:"Consent, permits and approved plans on site (or in the app) and read", type:"chips", options:YNA},
+        {id:"mob_council", label:"Council / client start notice given (date and how in notes)", type:"chips", options:YNA},
+        {id:"mob_holds", label:"Hold point inspections listed and the first one booked", type:"chips", options:YNA},
+        {id:"mob_tgs", label:"Traffic guidance scheme approved and signs on hand", type:"chips", options:YNA},
+        {id:"mob_locate", label:"Services located (DBYD / locate in date) and marks on site", type:"chips", options:YNA},
+        {id:"mob_swms", label:"SWMS and SOPs for the job in the app; crew read and signed (Job Start Checklist)", type:"chips", options:YNA},
+        {id:"mob_insure", label:"Insurances current; subcontractors' insurances and tickets sighted", type:"chips", options:YNA}
+      ]},
+      {id:"amenities", title:"Amenities and site set-up", fields:[
+        {id:"mob_office", label:"Site office or crib room set up", type:"chips", options:YNA},
+        {id:"mob_toilet", label:"Toilet on site (portable toilet booked and delivered)", type:"chips", options:YNA},
+        {id:"mob_water", label:"Drinking water and hand washing", type:"chips", options:YNA},
+        {id:"mob_skip", label:"Skip bin on site for waste (Snowy Skips)", type:"chips", options:YNA},
+        {id:"mob_sign", label:"Site sign with company name, supervisor and emergency phone numbers", type:"chips", options:YNA},
+        {id:"mob_fence", label:"Fencing, barriers or bunting around the work area", type:"chips", options:YNA},
+        {id:"mob_parking", label:"Parking, laydown and stockpile areas marked", type:"chips", options:YNA}
+      ]},
+      {id:"emergency", title:"Emergency and first aid", fields:[
+        {id:"mob_firstaid", label:"First aid kit stocked; first aider named", type:"chips", options:YNA},
+        {id:"mob_ext", label:"Fire extinguisher in date, at the office and on each machine", type:"chips", options:YNA},
+        {id:"mob_meet", label:"Emergency meeting point signed; nearest hospital and directions known", type:"chips", options:YNA},
+        {id:"mob_phone", label:"Mobile coverage checked (or another way to call for help)", type:"chips", options:YNA}
+      ]},
+      {id:"enviro", title:"Environment", fields:[
+        {id:"mob_esc", label:"Erosion and sediment controls installed before any ground is disturbed", type:"chips", options:YNA},
+        {id:"mob_spill", label:"Spill kit on site; fuel stored in a bunded area", type:"chips", options:YNA},
+        {id:"mob_washout", label:"Concrete washout area set up", type:"chips", options:YNA},
+        {id:"mob_cleandown", label:"Machinery clean-down area set up (weed sites)", type:"chips", options:YNA},
+        {id:"mob_noweeds", label:"Weed infestations, trees to keep and no-go areas marked", type:"chips", options:YNA}
+      ]},
+      {id:"plant", title:"Plant", fields:[
+        {id:"mob_plant", label:"Plant delivered clean (weed hygiene) and prestarted", type:"chips", options:YNA},
+        {id:"mob_float", label:"Float unloading area safe and clear of overhead lines", type:"chips", options:YNA}
+      ]},
+      {id:"done", title:"Ready to start", fields:[
+        {id:"mob_photos", label:"Photos of the site set-up", type:"photos"},
+        {id:"mob_notes", label:"Anything outstanding, who will fix it and by when", type:"textarea", voice:true, voiceHint:"Say anything not done yet, who is fixing it and when."},
+        {id:"mob_ready", label:"Result", type:"chips", options:["Ready to start","Not ready yet"], required:true},
+        {id:"mob_signature", label:"Supervisor signature", type:"signature", required:true}
+      ]}
+    ]
+  };
+  const mi = TEMPLATES.findIndex(x => x.id === mob.id);
+  if (mi > -1) TEMPLATES[mi] = mob; else TEMPLATES.push(mob);
+
+  /* ---------- Ecology: internal pre-disturbance check + third-party assessment ---------- */
+  const ecoInt = {
+    id:"MCK-Eco-Internal", name:"Internal Ecological Check (before ground disturbance)", category:"Environment (ISO 14001)",
+    code:"MCK-Eco-Internal", version:"v1", icon:"🦎",
+    workflow:{ type:"linear", columns:["Draft","Checked"], default:"Draft" },
+    instructions:"Our own record that we looked for plants, animals and habitat of significance before disturbing the ground. Walk every area to be disturbed, photograph it (use the Photo audit (AI) button with the Ecological type to have the AI screen the photos), and record what you found. This is a screening check, not an ecologist's assessment. If anything might be significant: stop work in that area, mark it off, and get an ecologist (use the Ecological Assessment (third-party) template).",
+    summary:{ titleField:"project", subField:"eco_date", tagField:"eco_result" },
+    prefillDefaults:{ eco_by:"@user", eco_date:"@today" },
+    sections:[
+      {id:"site", title:"Site and approvals", fields:[
+        {id:"project", label:"Project / Location", type:"select", options:PROJECT_LOCATIONS, required:true},
+        {id:"eco_date", label:"Date", type:"date", required:true},
+        {id:"eco_by", label:"Checked by", type:"select", options:USERS, required:true},
+        {id:"eco_area", label:"Areas to be disturbed (describe or sketch)", type:"textarea", required:true, voice:true},
+        {id:"eco_landuse", label:"Current and past land use (tick all)", type:"chips", options:["Ploughed or cropped","Sown improved pasture","Grazed by stock","Native pasture or grassland","Woodland or scattered trees","Roadside reserve","Wetland, creek or drainage line","Previously built on or filled"]},
+        {id:"eco_prior", label:"Ecological study done for the DA, subdivision or consent", type:"chips", options:["Yes, sighted","Yes, not sighted","No","Not known"]},
+        {id:"eco_prior_ref", label:"Study reference, author and any conditions", type:"text"},
+        {id:"eco_bionet", label:"Desktop check of threatened species records near the site (NSW BioNet Atlas or Biodiversity Values Map)", type:"chips", options:["Done, nothing relevant","Done, records nearby (note below)","Not done"]}
+      ]},
+      {id:"walk", title:"Walkover", fields:[
+        {id:"eco_features", label:"Features seen in or next to the areas to be disturbed (tick all)", type:"chips", options:["Native tussock grassland","Native trees or shrubs","Hollow-bearing or large old trees","Dead standing trees or fallen logs","Rocky outcrops or surface rock","Wetland, soak, dam or creek","Nests, burrows, scats or tracks","Animals seen","Priority weeds (e.g. African lovegrass)","None of these"]},
+        {id:"eco_photos", label:"Photos of every area to be disturbed", type:"photos", required:true},
+        {id:"eco_ai", label:"AI photo screening done (Photo audit, Ecological)", type:"chips", options:["Yes","No"]},
+        {id:"eco_finding_photos", label:"Photos of anything flagged", type:"photos"},
+        {id:"eco_findings", label:"Findings", type:"table", columns:["Finding (what was seen)","Significance (L/M/H)","Action","Owner","Due date","Status"]}
+      ]},
+      {id:"result", title:"Result", fields:[
+        {id:"eco_result", label:"Result", type:"chips", options:["Nothing of significance seen: proceed","Possible significance: STOP work in that area","Third-party ecologist needed before work"], required:true, affectsVisibility:true},
+        {id:"eco_stop", label:"", type:"notice", variant:"danger", showIf:{field:"eco_result", includes:"STOP"}, html:"<p><strong>Stop work in the affected area now.</strong> Mark it off with tape or fencing, keep plant out, photograph it and tell the client. Get an ecologist to assess it (Ecological Assessment template). Work elsewhere on site may continue if it is clear of the area.</p>"},
+        {id:"eco_stop_area", label:"Area stopped and how it is marked", type:"text", showIf:{field:"eco_result", includes:"STOP"}},
+        {id:"eco_notes", label:"Notes", type:"textarea", voice:true},
+        {id:"eco_signature", label:"Supervisor signature", type:"signature", required:true}
+      ]}
+    ]
+  };
+  const ecoExt = {
+    id:"MCK-Eco-ThirdParty", name:"Ecological Assessment (third-party ecologist)", category:"Environment (ISO 14001)",
+    code:"MCK-Eco-ThirdParty", version:"v1", icon:"🌿",
+    workflow:{ type:"linear", columns:["Requested","Assessed","Closed"], default:"Requested" },
+    instructions:"For a qualified ecologist to complete when a job may affect ecology of significance, or when our internal check finds something. The ecologist can fill this in directly, or attach their report and summarise it here.",
+    summary:{ titleField:"project", subField:"ea_date", tagField:"ea_conclusion" },
+    sections:[
+      {id:"who", title:"Ecologist and scope", fields:[
+        {id:"project", label:"Project / Location", type:"select", options:PROJECT_LOCATIONS, required:true},
+        {id:"ea_date", label:"Assessment date(s)", type:"text", required:true},
+        {id:"ea_name", label:"Ecologist name", type:"text", required:true},
+        {id:"ea_company", label:"Company and ABN", type:"text"},
+        {id:"ea_quals", label:"Qualifications / accreditation (e.g. BAM accredited assessor)", type:"text"},
+        {id:"ea_contact", label:"Phone and email", type:"text"},
+        {id:"ea_scope", label:"Scope: what was assessed and why (attach plan of the disturbance area)", type:"textarea", required:true},
+        {id:"ea_plan", label:"Plans and maps", type:"photos", accept:"image/*,application/pdf"}
+      ]},
+      {id:"desktop", title:"Desktop review", fields:[
+        {id:"ea_sources", label:"Sources checked", type:"chips", options:["NSW BioNet Atlas","EPBC Protected Matters Search","Biodiversity Values Map","State vegetation mapping (PCTs)","Previous DA / ecological reports","Council LEP / DCP mapping"]},
+        {id:"ea_desktop", label:"Desktop findings", type:"textarea"}
+      ]},
+      {id:"field", title:"Field survey", fields:[
+        {id:"ea_methods", label:"Survey methods, effort and weather", type:"textarea"},
+        {id:"ea_veg", label:"Vegetation communities", type:"table", columns:["Community / PCT","Condition","Area (ha)","Threatened community? (BC Act / EPBC)"]},
+        {id:"ea_species", label:"Threatened species recorded or likely", type:"table", columns:["Species","Status (BC Act / EPBC)","Recorded or likely","Location"]},
+        {id:"ea_habitat", label:"Habitat features (hollows, logs, rocks, water)", type:"textarea"},
+        {id:"ea_weeds", label:"Weeds recorded (priority weeds noted)", type:"textarea"},
+        {id:"ea_photos", label:"Survey photos", type:"photos"}
+      ]},
+      {id:"impact", title:"Impacts and recommendations", fields:[
+        {id:"ea_impacts", label:"Likely impacts of the proposed works", type:"textarea"},
+        {id:"ea_bos", label:"Biodiversity Offsets Scheme or EPBC referral likely to be triggered", type:"chips", options:["No","Yes","Unsure (explain)"]},
+        {id:"ea_recs", label:"Recommendations and mitigation measures (exclusion zones, timing, pre-clearance, fauna spotter)", type:"table", columns:["Measure","When","Responsible"]},
+        {id:"ea_conclusion", label:"Conclusion", type:"chips", options:["Works may proceed as planned","Works may proceed with the measures above","Works must not proceed in the affected area until approvals are obtained"], required:true},
+        {id:"ea_report", label:"Full report (attach)", type:"photos", accept:"application/pdf,image/*"}
+      ]},
+      {id:"sign", title:"Sign-off", fields:[
+        {id:"ea_signature", label:"Ecologist signature", type:"signature", required:true},
+        {id:"ea_received", label:"McKimm Civil supervisor: received, read and actions put in place", type:"signature"}
+      ]}
+    ]
+  };
+  [ecoInt, ecoExt].forEach(t => { const k = TEMPLATES.findIndex(x => x.id === t.id); if (k > -1) TEMPLATES[k] = t; else TEMPLATES.push(t); });
+
+  /* AI screening: Ecological type in the Photo audit */
+  if (typeof AUDIT_TYPES !== "undefined"){
+    AUDIT_TYPES.ecological = {
+      label:"Ecological (plants, animals, habitat)", modalTitle:"Ecological Screening — Photo Recognition", mode:"table",
+      targetTemplate:"MCK-Eco-Internal", defaultCategory:"flora",
+      categories:{ flora:{ label:"Plants" }, fauna:{ label:"Animals or signs" }, habitat:{ label:"Habitat" }, weed:{ label:"Weeds" } },
+      photoField:"eco_finding_photos", tableField:"eco_findings",
+      prefillBase:(project) => ({ project, eco_date:new Date().toISOString().slice(0,10), eco_by:STATE.currentUser, eco_ai:["Yes"], eco_photos:(typeof AUDIT_AI !== "undefined" ? AUDIT_AI.photos.slice() : []) })
+    };
+  }
+  /* Heritage: AI screening into the existing Heritage Investigation, plus a result section */
+  (function(){
+    const ht = templateById("MCK-Enviro-Heritage");
+    if (ht && !ht.sections.some(x => x.id === "hx_ai_sec")){
+      const signIdx = ht.sections.findIndex(x => x.fields.some(fl => fl.id === "heritage_signature"));
+      ht.sections.splice(signIdx < 0 ? ht.sections.length : signIdx, 0, { id:"hx_ai_sec", title:"Records search, AI screening and result", fields:[
+        {id:"hx_ahims", label:"AHIMS search of recorded Aboriginal sites near the site (attach above)", type:"chips", options:["Done: no sites recorded nearby","Done: sites recorded nearby (note below)","Not done"]},
+        {id:"hx_other", label:"Other heritage lists checked", type:"chips", options:["Council LEP heritage map","NSW State Heritage Inventory","DA / consent heritage conditions","None"]},
+        {id:"hx_ai", label:"AI photo screening done (Photo audit, Heritage)", type:"chips", options:["Yes","No"]},
+        {id:"hx_findings", label:"Findings", type:"table", columns:["Finding (what was seen)","Significance (L/M/H)","Action","Owner","Due date","Status"]},
+        {id:"hx_result", label:"Result", type:"chips", options:["Nothing of heritage concern seen: proceed","Possible heritage item: STOP work at that spot"], affectsVisibility:true},
+        {id:"hx_stop", label:"", type:"notice", variant:"danger", showIf:{field:"hx_result", includes:"STOP"}, html:"<p><strong>Stop work at that spot, leave the item where it is and do not disturb it.</strong> Mark off at least 10 m around it, photograph it, and call Al. Follow the Unexpected Finds SOP: possible Aboriginal objects are reported to Heritage NSW, and possible historic relics to the Heritage Council, before work there continues.</p>"},
+        {id:"hx_stop_area", label:"Where work was stopped and how it is marked", type:"text", showIf:{field:"hx_result", includes:"STOP"}}
+      ]});
+    }
+  })();
+  if (typeof AUDIT_TYPES !== "undefined"){
+    AUDIT_TYPES.heritage = {
+      label:"Heritage (artefacts, scarred trees, old structures)", modalTitle:"Heritage Screening — Photo Recognition", mode:"table",
+      targetTemplate:"MCK-Enviro-Heritage", defaultCategory:"aboriginal",
+      categories:{ aboriginal:{ label:"Possible Aboriginal heritage" }, historic:{ label:"Possible historic heritage" }, features:{ label:"Landscape feature" } },
+      photoField:"heritage_photos", tableField:"hx_findings",
+      prefillBase:(project) => ({ heritage_project:project, heritage_date:new Date().toISOString().slice(0,10), hx_ai:["Yes"] })
+    };
+  }
+  if (typeof renderAuditResultsModal === "function"){
+    const origResults = renderAuditResultsModal;
+    window.renderAuditResultsModal = function(){
+      if (AUDIT_AI && AUDIT_AI.type === "heritage" && AUDIT_AI.results && !AUDIT_AI.results.length){
+        const cfg = AUDIT_TYPES.heritage, pre = cfg.prefillBase(AUDIT_AI.project);
+        pre.heritage_photos = AUDIT_AI.photos.slice();
+        pre.heritage_feature_desc = "AI photo screening of " + AUDIT_AI.photos.length + " photo(s) found no possible artefacts, scarred trees or historic structures. Supervisor to confirm on the walkover.";
+        const form = createForm(cfg.targetTemplate, pre);
+        closeModal(); toast("No heritage findings: saved the photos to a Heritage Investigation for your records");
+        if (form) nav("form", { id:form.templateId, formId:form.id });
+        return;
+      }
+      if (AUDIT_AI && AUDIT_AI.type === "ecological" && AUDIT_AI.results && !AUDIT_AI.results.length){
+        const cfg = AUDIT_TYPES.ecological, pre = cfg.prefillBase(AUDIT_AI.project);
+        pre.eco_notes = "AI photo screening of " + AUDIT_AI.photos.length + " photo(s) found no plants, animals or habitat of concern. Supervisor to confirm on the walkover.";
+        const form = createForm(cfg.targetTemplate, pre);
+        closeModal(); toast("No ecological findings: saved the photos to an Internal Ecological Check for your records");
+        if (form) nav("form", { id:form.templateId, formId:form.id });
+        return;
+      }
+      return origResults();
+    };
+  }
+
+  /* ---------- Before work starts: what must be done and signed ---------- */
+  const BEFORE = [
+    ["MCK-Job-Start", "js_signature", "Job Start Checklist (crew, plant and tasks)"],
+    ["MCK-Mobilisation", "mob_signature", "Site Mobilisation Checklist (amenities, office, skip, signs, first aid)"],
+    ["MCK-DAR-002", "signature", "Site Safety Pre-Check"],
+    ["MCK-Layout", "completed_signature", "Site Layout Plan"],
+    ["MCK-WHS-Emergency", "supervisor_signature", "Emergency Procedure"],
+    ["MCK-Permits-Site", "issuer_signature", "Site Permits Check"],
+    ["MCK-Utility-Locate", "supervisor_signature", "Underground Services Locate Record"],
+    ["MCK-WHS-DiLAP", "inspector_signature", "Dilapidation Report (photos of existing condition)"],
+    ["MCK-Enviro-SiteRisk", "eri_inspector_signature", "Environmental Risk Inspection"],
+    ["MCK-Enviro-Heritage", "heritage_signature", "Heritage Investigation"],
+    ["MCK-Eco-Internal", "eco_signature", "Internal Ecological Check (photos screened by AI)"],
+    ["MCK-WHS-SWMS", "supervisor_signature", "Construction RAMS (site risk assessment)"],
+    ["MCK-Toolbox-JobStart", "tbj_signature", "Job start toolbox talk held"]
+  ];
+  function beforeStart(p){
+    const fs = formsForProject(p), job = jobFor(p);
+    const items = BEFORE.filter(([tid]) => templateById(tid)).map(([tid, sigF, label]) => {
+      const done = fs.find(fm => fm.templateId === tid && sigOk((fm.data||{})[sigF]));
+      const draft = !done && fs.find(fm => fm.templateId === tid);
+      return { tid, label, done, draft };
+    });
+    const crew = job ? arr((job.data||{}).js_crew) : [];
+    const crewOk = job && crew.length && crew.every(c => !gaps(job, c).read.length);
+    items.push({ tid:null, label:"Crew have read and signed every SOP and SWMS for the job", done:crewOk, crew:true });
+    return { items, n:items.filter(i => i.done).length, total:items.length };
+  }
+  function beforeCard(p){
+    const b = beforeStart(p), job = jobFor(p);
+    const rows = b.items.map(i => {
+      const st = i.done ? `<span style="color:${OKC};font-weight:600">✓ Done</span>` : (i.draft ? `<span style="color:${WARNC}">Started, not signed</span>` : `<span style="color:${BADC}">Not done</span>`);
+      const act = i.crew ? "" : (i.done ? a("open", `nav('form',{id:'${i.tid}',formId:'${i.done.id}'})`) : (i.draft ? a("finish it", `nav('form',{id:'${i.tid}',formId:'${i.draft.id}'})`) : (i.tid === "MCK-Toolbox-JobStart" && job ? a("start", `MCK_JOB.startToolbox('${job.id}')`) : a("start", `MCK_JOB.startForProject('${i.tid}')`))));
+      return `<tr><td>${esc(i.label)}</td><td>${st}</td><td style="text-align:right">${act}</td></tr>`;
+    }).join("");
+    const all = b.n === b.total;
+    return `<div class="card" style="margin-bottom:14px;padding:14px 16px;border-left:4px solid ${all ? OKC : BADC}"><h3 style="margin:0 0 4px;font-size:16px">${all ? "✓ Ready to start work" : "Before work starts: " + b.n + " of " + b.total + " done"}</h3>
+      <p style="font-size:13px;color:${MUTED};margin:0 0 8px">Each one must be completed and signed for this job before work starts on site.</p>
+      <div class="list" style="overflow:auto"><table><tbody>${rows}</tbody></table></div></div>`;
+  }
+
+  /* ---------- Weekly inspections due every Friday, only on active jobs ---------- */
+  const WEEKLY_FRIDAY = ["safety-inspection", "enviro-monitor", "safety-monitor"];
+  if (typeof RECURRING_COMPLIANCE !== "undefined") RECURRING_COMPLIANCE.forEach(i => { if (WEEKLY_FRIDAY.indexOf(i.key) > -1) i.weekday = 5; });
+  const DAY = 86400000;
+  function mondayOf(ts){ const d = new Date(ts); d.setHours(0,0,0,0); const wd = (d.getDay() + 6) % 7; return d.getTime() - wd * DAY; }
+  if (typeof complianceStatus === "function"){
+    const origStatus = complianceStatus;
+    window.complianceStatus = function(item, projectValue){
+      if (!item.weekday) return origStatus(item, projectValue);
+      const last = complianceLastForm(item, projectValue);
+      const now = Date.now(), wk = mondayOf(now), fri = wk + (item.weekday - 1) * DAY;
+      const today = new Date(now); today.setHours(0,0,0,0);
+      const doneThisWeek = last && (last.createdAt || 0) >= wk;
+      let dueTs, daysLeft, status;
+      if (doneThisWeek){ dueTs = fri + 7 * DAY; daysLeft = Math.round((dueTs - today.getTime()) / DAY); status = "ok"; }
+      else {
+        const js = jobFor(projectValue), jsDate = js && (js.data||{}).js_date ? new Date(js.data.js_date + "T00:00:00").getTime() : 0;
+        if (!last && jsDate > fri){   // job started after this week's Friday: first one due next Friday
+          dueTs = fri + 7 * DAY; daysLeft = Math.round((dueTs - today.getTime()) / DAY);
+          return Object.assign({}, item, { projectValue, last, dueTs, daysLeft, status: daysLeft <= 0 ? "soon" : "ok", weekly:true, doneThisWeek:false });
+        }
+        dueTs = fri; daysLeft = Math.round((fri - today.getTime()) / DAY);
+        const doneLastWeek = last && (last.createdAt || 0) >= wk - 7 * DAY;
+        status = daysLeft < 0 ? "overdue" : (daysLeft === 0 ? "soon" : (doneLastWeek ? "ok" : (last ? "overdue" : "soon")));
+      }
+      return Object.assign({}, item, { projectValue, last, dueTs, daysLeft, status, weekly:true, doneThisWeek:!!doneThisWeek });
+    };
+  }
+  if (typeof complianceBadgeHtml === "function"){
+    const origBadge = complianceBadgeHtml;
+    window.complianceBadgeHtml = function(item){
+      if (!item.weekly) return origBadge(item);
+      if (item.doneThisWeek) return `<span class="status ok">Done this week</span>`;
+      if (item.status === "overdue") return `<span class="status bad">Overdue (due Friday)</span>`;
+      if (item.daysLeft === 0) return `<span class="status wait">Due today (Friday)</span>`;
+      return `<span class="status ${item.status === "ok" ? "ok" : "wait"}">Due Friday</span>`;
+    };
+  }
+  if (typeof projectComplianceList === "function"){
+    const origList = projectComplianceList;
+    window.projectComplianceList = function(p){
+      const configured = (typeof PROJECT_COMPLIANCE_CONFIG !== "undefined") && Array.isArray(PROJECT_COMPLIANCE_CONFIG[p]);
+      const j = jobFor(p);
+      if (!configured && !(j && sigOk((j.data||{}).js_signature))) return [];
+      return origList(p);
+    };
+  }
+
   /* ---------- Project page (click a job in the left-hand list on McKimm Pivot) ---------- */
   const PF = ["project","project_location","project_name","project_site","site_location","eri_project","heritage_project","js_project","tbj_project","lp_project"];
   const allF = t => (t.sections||[]).reduce((acc, sec) => acc.concat(sec.fields||[]), []);
@@ -325,10 +652,10 @@
     const pre = plant.map(x => PRESTART[x]).filter(Boolean);
     const G = [
       ["Every day", ["MCK-Daily-Report", "MCK-Daily-Timesheet", "MCK-Daily-VehicleLog"].concat(pre, has("Excavation and trenching") || rrT.indexOf("MCK-Safety-TrenchInsp") > -1 ? ["MCK-Safety-TrenchInsp"] : [])],
-      ["Setting up the site", ["MCK-DAR-002", "MCK-Layout", "MCK-Permits-Site", "MCK-WHS-DiLAP", "MCK-WHS-Emergency", "MCK-Safety-Employ", "MCK-WHS-SWMS"].concat(has("Underground services and potholing") || rrT.indexOf("MCK-Utility-Locate") > -1 ? ["MCK-Utility-Locate"] : [])],
+      ["Setting up the site", ["MCK-Mobilisation", "MCK-DAR-002", "MCK-Layout", "MCK-Permits-Site", "MCK-WHS-DiLAP", "MCK-WHS-Emergency", "MCK-Safety-Employ", "MCK-WHS-SWMS"].concat(has("Underground services and potholing") || rrT.indexOf("MCK-Utility-Locate") > -1 ? ["MCK-Utility-Locate"] : [])],
       ["Safety", ["MCK-Toolbox-JobStart", "MCK-Safety-Inspection", "MCK-Incident", "MCK-WHS-SiteEmployee", "MCK-Safety-Monitor"].concat(has("Pipe laying, headwalls and slinging lifts") ? ["MCK-Lift-Plan"] : [])],
       ["Quality and hold points", ["MCK-NCR", "MCK-CAR"].concat(rrT.filter(x => /Road-UBP|Geotech/.test(x)), has("Concrete mixing bucket") ? ["MCK-CQ"] : [])],
-      ["Environment", ["MCK-Enviro-SiteRisk", "MCK-Enviro-Monitor", "MCK-Enviro-Heritage"]],
+      ["Environment", ["MCK-Eco-Internal", "MCK-Eco-ThirdParty", "MCK-Enviro-SiteRisk", "MCK-Enviro-Monitor", "MCK-Enviro-Heritage"].concat(tasks.some(x => /^Weed hygiene/.test(x)) ? ["MCK-Hygiene-Record"] : [])],
       ["Training, sign-offs and plant", ["MCK-Training-Record", "MCK-Competency-Signoff", "MCK-Maint-Log"]],
       ["Finishing the job", ["MCK-Demob", "MCK-Project-Handover"]]
     ];
@@ -369,8 +696,10 @@
           : (preset ? `<button class="btn primary" onclick="MCK_JOB.startPreset('${preset}')">🚩 Set up ${esc(PRESETS[preset].label)} (Job Start Checklist)</button>` : `<button class="btn primary" onclick="MCK_JOB.startForProject('${tpl.id}')">🚩 New Job Start Checklist</button>`)}
         ${isRR ? `<button class="btn" onclick="nav('projectinfo')">📌 Project Requirements</button>` : ""}
         <button class="btn" onclick="nav('register')">📊 Full register</button>
+        <button class="btn" onclick="openAuditPhotoAnalyzer(STATE.activeFolder)">📷 Photo audit (AI)</button>
       </div>
       ${job ? "" : `<div class="notice notice-info" style="margin-bottom:14px">Set up the Job Start Checklist for this job to tailor the forms below to its plant and tasks and to see the crew sign-offs.</div>`}
+      ${job ? beforeCard(p) : ""}
       ${stats}
       <div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 4px;font-size:16px">Templates for this job</h3><p style="font-size:13px;color:${MUTED};margin:0 0 10px">Tap one to start it with the job already filled in. The number in brackets is how many have been done on this job.</p>${grpHtml}
         <details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">All other templates (${others.length})</summary><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${others.map(t => btn(t.id)).join("")}</div></details></div>
@@ -383,5 +712,5 @@
   window.CUSTOM_VIEWS = Object.assign(window.CUSTOM_VIEWS || {}, { job: renderProject });
   if (typeof filterByFolder === "function") window.filterByFolder = function(path){ STATE.activeFolder = path; save(); nav("job"); };
 
-  window.MCK_JOB = { PLANT, TASKS, PRESETS, startForProject, formsForProject, jobFor, requirements, gaps, activeJobs, crewCard, jobsCard, startPreset, startToolbox, TEMPLATE_ID:tpl.id, TOOLBOX_ID:tbt.id };
+  window.MCK_JOB = { beforeStart, PLANT, TASKS, PRESETS, startForProject, formsForProject, jobFor, requirements, gaps, activeJobs, crewCard, jobsCard, startPreset, startToolbox, TEMPLATE_ID:tpl.id, TOOLBOX_ID:tbt.id };
 })();

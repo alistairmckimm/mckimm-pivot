@@ -1097,4 +1097,69 @@
       ["info","Sources","Written for McKimm Civil from: a manufacturer&rsquo;s operator manual for an auger mixing bucket (Skid Pro); the Safe Work Australia quick hitch information sheet; Safe Work Australia guidance on working with cement and concrete; and our own Quick Hitch, Erosion and Washout, and Servicing SOPs. Check against the manual for our own bucket once the make is confirmed."]
     ] });
 
+
+  /* ============================ 27. WEED HYGIENE AND DECONTAMINATION PLAN (v1.0, 16 Nov 2026) ============================ */
+  reg({ id:"MCK-SOP-HYGIENE-01", key:"hygiene", icon:"🌾", name:"Weed Hygiene and Machinery Decontamination Plan (incl. African Lovegrass)", short:"weed hygiene and clean-down",
+    applies:"every machine, truck, trailer, ute, attachment and person leaving a site with priority weeds (such as African lovegrass), or going to a sensitive area, for McKimm Civil and Snowy Skips.",
+    ack:" I understand no machine, vehicle, attachment or tool leaves a weed site until it has been cleaned, inspected and recorded on the Machinery Hygiene Record, and that cleaned-off material stays on the infested site.",
+    comp:"Machinery weed hygiene and clean-down",
+    checks:["Can recognise African lovegrass and knows its seed is tiny, lasts for years and spreads on machines, tyres, tracks, soil and clothing",
+      "Plans the work: clean areas first, infested areas last, keeps plant off infested patches where possible",
+      "Uses the site clean-down area: on the infested side, firm ground, away from drains, waterways and the site exit",
+      "Isolates the machine before cleaning (attachments down, engine off, key out)",
+      "Cleans top down: scrapes and brushes off soil, blows down with compressed air when dry, pressure washes when muddy, rotates tracks to clean the hidden side",
+      "Checks the hot spots: tracks, idlers, rollers, belly plates, radiator and grilles, buckets and attachments, linkages, cab floor, pedals, mats, toolboxes, tyres and arches, trailer decks",
+      "Wears eye protection, a P2 mask and hearing protection; never points compressed air or the pressure washer at a person",
+      "Completes the Machinery Hygiene Record with before and after photos, and gets Supervisor sign-off before a machine goes to a sensitive area"],
+    sections:[
+      ["info","Purpose","Weed seed and infested soil travel on machinery, trucks, tyres, attachments, tools, boots and clothing. Under the NSW <em>Biosecurity Act 2015</em> everyone has a <strong>general biosecurity duty</strong> to prevent, eliminate or minimise the risk of spreading weeds, so far as reasonably practicable. This plan sets how McKimm Civil stops weeds such as <strong>African lovegrass</strong> leaving our sites. It works together with our detailed machine-by-machine cleaning procedure, <strong>SOP &ndash; Decontamination Excavators (MCK-Enviro-Decontaminate)</strong>, which applies to all plant."],
+      ["warning","African lovegrass: know it",{ l:[
+        "A tufted, wiry perennial grass, grey-green, with fine drooping seed heads. It is a serious weed of the Monaro and is present on <strong>Rockwell Road</strong>.",
+        "Each seed head holds <strong>300 to 1,000 seeds</strong>, only about <strong>0.3 to 0.7 mm</strong> long: small enough to lodge in mud, tread, track plates, radiators and clothing.",
+        "Seed stays alive in the soil for <strong>5 years or more</strong>, some for up to 17 years.",
+        "Seed is on the plants from <strong>mid-summer to autumn</strong>: hygiene matters most then, but infested soil carries seed all year.",
+        "Spread is mainly by <strong>machinery, vehicles, soil, hay and gravel</strong> moved from infested ground.",
+        "If you are not sure whether a plant is African lovegrass, photograph it and ask the Supervisor or the Snowy Monaro Regional Council weeds officer."] }],
+      ["danger","When a clean-down is required",{ l:[
+        "<strong>Before any machine, truck, trailer, ute or attachment leaves a site with priority weeds</strong>, including Rockwell Road.",
+        "<strong>Always before going to a sensitive area</strong>: national parks and reserves (including Kosciuszko), waterways and catchments, farms and properties free of the weed, Council sites that require it, or any client that asks. These moves need the Supervisor&rsquo;s sign-off on the record.",
+        "Before plant returns to the depot from a weed site.",
+        "Before plant arrives on a new site, if it was not cleaned when it left the last one.",
+        "When moving from an infested part of a site to a clean part of the same site."] }],
+      ["warning","Plan the job to reduce cleaning",{ l:[
+        "Mark infested patches on the site layout plan and at the job start toolbox talk.",
+        "<strong>Work clean areas first and infested areas last.</strong> Keep trucks and utes on hard tracks and out of infested grass where you can.",
+        "Do not move topsoil or spoil from infested areas off site or onto clean areas unless the client and Council have approved where it goes. Stockpile it on the infested area.",
+        "Do not bring in gravel, soil or mulch from weedy sources. Ask suppliers about weed-free material."] }],
+      ["warning","The clean-down area",{ l:[
+        "Set up a clean-down area <strong>on the infested side of the site, near the exit</strong>, so seed stays on the site. Firm, level ground or a hardstand, rumble grid or mat if available.",
+        "<strong>Well away from drains, table drains, waterways and dams</strong>, and where wash water soaks in on site and cannot run off (see the Erosion, Sediment and Washout SOP).",
+        "Clear of traffic, overhead lines and other plant.",
+        "Cleaned-off soil and plant material <strong>stays on the infested site</strong>. Never wash it into a drain or take it away in the truck."] }],
+      ["danger","Safety while cleaning",{ l:[
+        "<strong>Isolate the machine first</strong>: attachments on the ground, park brake on, engine off, key out, lockout lever up (Servicing SOP). Rotate tracks only when nobody is near the machine, then isolate again.",
+        "Eye protection, <strong>P2 dust mask</strong> when blowing down dry dirt, hearing protection, gloves and boots.",
+        "<strong>Never point compressed air or a pressure washer at yourself or anyone else</strong>, and never use compressed air to clean clothing on your body. Use a regulated blow gun and keep air pressure as low as does the job.",
+        "Use the Getting On and Off Plant SOP when cleaning steps, cab and upper surfaces. Do not stand on tracks or buckets."] }],
+      ["warning","How to clean",{ o:[
+        "<strong>Scrape and brush</strong> off clods of soil and plant material with a shovel, scraper or stiff brush.",
+        "<strong>Dry conditions: blow down with compressed air</strong>, working <strong>top down</strong>: cab roof and upper body, then under guards and belly plates, then the undercarriage, then attachments.",
+        "<strong>Muddy or caked: pressure wash</strong>, top down, then let it drain on the clean-down area.",
+        "<strong>Tracked machines:</strong> clean, then move forward or back so the tracks rotate at least 180 degrees, and clean the hidden side, idlers, rollers and track frame.",
+        "Open or remove belly plates and guards where practical to reach trapped soil; refit them before moving.",
+        "<strong>Cab:</strong> shake or remove mats, sweep or vacuum the floor, pedals and seat recess. Blow out the cab air filter and vents.",
+        "Clean <strong>attachments</strong> (buckets inside and out, mixing bucket, rippers), <strong>toolboxes</strong>, hand tools, shovels and rakes.",
+        "<strong>People:</strong> brush down boots and clothing, check socks and trouser cuffs for seed.",
+        "Trucks, utes and trailers: tyres and treads, wheel arches, mud flaps, chassis rails, decks and tailgates, and the float deck after unloading plant.",
+        "Move the clean machine straight off the clean-down area without driving back through infested ground."] }],
+      ["warning","Hot spots to check before signing it off",["Tracks, track plates, idlers, rollers, sprockets and the track frame","Belly plates, guards and the top of the frame rails","Radiator, oil cooler, grilles and air cleaner intakes","Buckets, teeth, the quick hitch, rams, linkages and pins","Cab floor, pedals, mats, seat recess and steps","Tyres, treads, wheel arches, mud flaps and the chassis","Toolboxes, trays, decks, tailgates and the float deck"]],
+      ["danger","Inspect, record and release",{ o:[
+        "The operator inspects every hot spot. If any soil or plant material remains, clean it again.",
+        "Complete the <strong>Machinery Hygiene Record</strong> in McKimm Field: machine, where it is going, how it was cleaned, hot spots checked, and <strong>before and after photos</strong>.",
+        "<strong>Going to a sensitive area:</strong> the Supervisor inspects it and signs the record before it leaves.",
+        "If it cannot be cleaned to this standard on site, it does not go to a sensitive area. Move it only to the depot clean-down area, on a float or truck with the load covered, and finish cleaning there."] }],
+      ["info","Reporting",["Report new weed infestations you find on any site to the Supervisor with a photo and location. The Supervisor tells the client and, for priority weeds, the Council weeds officer.","A machine found to have left a site uncleaned is reported as an environmental incident (Incident SOP)."]],
+      ["info","Sources","Written for McKimm Civil from: NSW Biosecurity Act 2015 (general biosecurity duty); NSW WeedWise African lovegrass profile; NSW Government guidance on vehicle and machinery hygiene; Snowy Monaro Regional Council&rsquo;s vehicle and machinery biosecurity hygiene procedure; and our existing SOP &ndash; Decontamination Excavators."]
+    ] });
+
 })();
