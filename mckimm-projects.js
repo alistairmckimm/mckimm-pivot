@@ -156,6 +156,7 @@
 
   window.MCK_PROJ = {
     RR, LOCATE, locateStatus, CREW_DOCS, CREW,
+    get RR_TEMPLATES(){ return Object.keys(D); },
     /* called by createForm(): tokens (e.g. employee/date on SOPs), then project defaults */
     onCreate(form, t){
       if (t.prefillDefaults) Object.keys(t.prefillDefaults).forEach(k => { if (isEmpty(form.data[k])) form.data[k] = resolve(t.prefillDefaults[k]); });

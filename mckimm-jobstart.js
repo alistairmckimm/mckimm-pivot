@@ -312,7 +312,27 @@
     const pf = projField(t), pre = {};
     if (pf) pre[pf] = p;
     if (tid === "MCK-Daily-Report") pre.report_date = (typeof todayISO === "function" ? todayISO() : "");
-    startForm(tid, pre);
+    const keep = STATE.fieldProject;
+    if (!pf) STATE.fieldProject = p;           // lets project defaults apply to templates with no project field
+    try { startForm(tid, pre); } finally { STATE.fieldProject = keep; }
+  }
+  const PRESTART = { "Komatsu PC200-8 excavator (20 t)":"MCK-PSM-Komatsu-PC200", "Wacker Neuson 38Z3 excavator (4 t)":"MCK-PSM-Wacker-38Z3", "Sunward SWE17 mini excavator":"MCK-PSM-Sunward-SWE17", "Sunward SWL2810 skid steer":"MCK-PSM-Skid-Steer", "Wacker Neuson RT82 roller":"MCK-PSM-Wacker-RT82", "Mitsubishi MG100 grader":"MCK-PSM-Mitsubishi-Grader" };
+  function applicable(p, job){
+    const d = (job && job.data) || {}, plant = arr(d.js_plant), tasks = arr(d.js_tasks);
+    const has = x => tasks.indexOf(x) > -1;
+    const isRR = window.MCK_PROJ && p === MCK_PROJ.RR;
+    const rrT = isRR ? (MCK_PROJ.RR_TEMPLATES || []) : [];
+    const pre = plant.map(x => PRESTART[x]).filter(Boolean);
+    const G = [
+      ["Every day", ["MCK-Daily-Report", "MCK-Daily-Timesheet", "MCK-Daily-VehicleLog"].concat(pre, has("Excavation and trenching") || rrT.indexOf("MCK-Safety-TrenchInsp") > -1 ? ["MCK-Safety-TrenchInsp"] : [])],
+      ["Setting up the site", ["MCK-DAR-002", "MCK-Layout", "MCK-Permits-Site", "MCK-WHS-DiLAP", "MCK-WHS-Emergency", "MCK-Safety-Employ", "MCK-WHS-SWMS"].concat(has("Underground services and potholing") || rrT.indexOf("MCK-Utility-Locate") > -1 ? ["MCK-Utility-Locate"] : [])],
+      ["Safety", ["MCK-Toolbox-JobStart", "MCK-Safety-Inspection", "MCK-Incident", "MCK-WHS-SiteEmployee", "MCK-Safety-Monitor"].concat(has("Pipe laying, headwalls and slinging lifts") ? ["MCK-Lift-Plan"] : [])],
+      ["Quality and hold points", ["MCK-NCR", "MCK-CAR"].concat(rrT.filter(x => /Road-UBP|Geotech/.test(x)), has("Concrete mixing bucket") ? ["MCK-CQ"] : [])],
+      ["Environment", ["MCK-Enviro-SiteRisk", "MCK-Enviro-Monitor", "MCK-Enviro-Heritage"]],
+      ["Training, sign-offs and plant", ["MCK-Training-Record", "MCK-Competency-Signoff", "MCK-Maint-Log"]],
+      ["Finishing the job", ["MCK-Demob", "MCK-Project-Handover"]]
+    ];
+    return G.map(([g, ids]) => [g, ids.filter((x, i) => ids.indexOf(x) === i && templateById(x))]);
   }
   function renderProject(m){
     const p = STATE.activeFolder || "";
@@ -320,27 +340,44 @@
     const preset = Object.keys(PRESETS).find(k => PRESETS[k].data.js_project === p);
     const isRR = window.MCK_PROJ && p === MCK_PROJ.RR;
     const fs = formsForProject(p);
+    const count = tid => fs.filter(fm => fm.templateId === tid).length;
+    const last = tid => { const x = fs.find(fm => fm.templateId === tid); return x ? (typeof fmtDate === "function" ? fmtDate(new Date(x.updatedAt||x.createdAt).toISOString().slice(0,10)) : "") : "never"; };
+    const crew = job ? arr((job.data||{}).js_crew) : [];
+    const ready = job ? crew.filter(c => !gaps(job, c).count).length : 0;
+    const tile = (n, l, sub) => `<div class="card" style="padding:12px 14px;min-width:150px;flex:1 1 150px"><div style="font-size:26px;font-weight:700;line-height:1.1">${n}</div><div style="font-size:13px;font-weight:600">${l}</div><div style="font-size:12px;color:${MUTED}">${sub||""}</div></div>`;
+    const stats = `<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      ${tile(count("MCK-Daily-Report"), "Daily reports", "last: " + last("MCK-Daily-Report"))}
+      ${tile(fs.filter(fm => /^MCK-PSM-/.test(fm.templateId)).length, "Machine prestarts", "")}
+      ${tile(count("MCK-Incident") + count("MCK-NCR"), "Incidents and NCRs", count("MCK-Incident") + " incidents, " + count("MCK-NCR") + " NCRs")}
+      ${tile(count("MCK-Toolbox-JobStart") + count("MCK-Toolbox-Fatigue"), "Toolbox talks", "")}
+      ${tile(job && signed ? ready + " of " + crew.length : "—", "Crew fully signed off", job && signed ? "" : "set up the Job Start Checklist")}
+      ${tile(fs.length, "Forms for this job", "")}
+    </div>`;
+    const btn = tid => { const t = templateById(tid); const n = count(tid); return `<button class="btn sm" onclick="MCK_JOB.startForProject('${tid}')" title="${esc(t.name)}">${esc(t.icon||"")} ${esc(t.name)}${n ? ` <span style="color:${MUTED}">(${n})</span>` : ""}</button>`; };
+    const groups = applicable(p, job);
+    const shown = {}; groups.forEach(([, ids]) => ids.forEach(x => shown[x] = 1));
+    const grpHtml = groups.filter(([, ids]) => ids.length).map(([g, ids]) => `<div style="margin:0 0 12px"><div style="font-size:12px;font-weight:600;color:${MUTED};text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px">${esc(g)}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${ids.map(btn).join("")}</div></div>`).join("");
+    const others = TEMPLATES.filter(t => !shown[t.id] && !/^MCK-(SOP|SWMS|Safety-Ex|Enviro-(BMI|Decontaminate|ESC)|Safety-MA|Safety-Vermeer|Employee|Employment|Contractor-COE|Email-COE|HR-|Backup|Doc-Review|Job-Start)/.test(t.id));
     const recent = fs.slice(0, 40).map(fm => { const t = templateById(fm.templateId) || {}; const title = (fm.data||{})[(t.summary||{}).titleField||""] || ("Form #" + fm.number);
       return `<tr style="cursor:pointer" onclick="nav('form',{id:'${fm.templateId}',formId:'${fm.id}'})"><td>${esc(t.icon||"")} ${esc(t.name||fm.templateId)}</td><td><strong>${esc(title)}</strong></td><td>${esc(fm.workflowColumn||"")}</td><td>${typeof fmtDateTime === "function" ? fmtDateTime(fm.updatedAt||fm.createdAt) : ""}</td></tr>`; }).join("");
-    const cats = {};
-    TEMPLATES.forEach(t => { if (!projField(t) || /^MCK-(SOP|SWMS|Safety-Ex)/.test(t.id)) return; (cats[t.category||"Other"] = cats[t.category||"Other"] || []).push(t); });
-    const tplHtml = Object.keys(cats).sort().map(c => `<div style="margin:0 0 10px"><div style="font-size:12px;font-weight:600;color:${MUTED};text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">${esc(c)}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${cats[c].map(t => `<button class="btn sm" onclick="MCK_JOB.startForProject('${t.id}')">${esc(t.icon||"")} ${esc(t.name)}</button>`).join("")}</div></div>`).join("");
     const docs = job ? requirements(job).docs.map(id => `<button class="btn sm" onclick="MCKT.open('${id}')">${esc(((docInfo(id)||{}).title) || (templateById(id)||{}).name || id)}</button>`).join(" ") : "";
-    m.innerHTML = `<div style="max-width:1100px">
+    m.innerHTML = `<div style="max-width:1150px">
       <div class="crumbs"><span>McKimm Civil Pty Ltd</span><span class="sep">›</span><span>Jobs</span></div>
       <h1 style="margin:0 0 10px">📁 ${esc(p)}</h1>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
         ${job ? `<button class="btn primary" onclick="nav('form',{id:'${tpl.id}',formId:'${job.id}'})">🚩 Job Start Checklist${signed ? "" : " (not signed yet)"}</button><button class="btn primary" onclick="MCK_JOB.startToolbox('${job.id}')">🗣 Job start toolbox talk</button>`
           : (preset ? `<button class="btn primary" onclick="MCK_JOB.startPreset('${preset}')">🚩 Set up ${esc(PRESETS[preset].label)} (Job Start Checklist)</button>` : `<button class="btn primary" onclick="MCK_JOB.startForProject('${tpl.id}')">🚩 New Job Start Checklist</button>`)}
-        <button class="btn" onclick="MCK_JOB.startForProject('MCK-Daily-Report')">📋 Daily Report</button>
         ${isRR ? `<button class="btn" onclick="nav('projectinfo')">📌 Project Requirements</button>` : ""}
-        <button class="btn" onclick="nav('register')">📊 Register for this job</button>
+        <button class="btn" onclick="nav('register')">📊 Full register</button>
       </div>
+      ${job ? "" : `<div class="notice notice-info" style="margin-bottom:14px">Set up the Job Start Checklist for this job to tailor the forms below to its plant and tasks and to see the crew sign-offs.</div>`}
+      ${stats}
+      <div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 4px;font-size:16px">Templates for this job</h3><p style="font-size:13px;color:${MUTED};margin:0 0 10px">Tap one to start it with the job already filled in. The number in brackets is how many have been done on this job.</p>${grpHtml}
+        <details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">All other templates (${others.length})</summary><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${others.map(t => btn(t.id)).join("")}</div></details></div>
       ${job && signed ? `<div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 8px;font-size:16px">Crew sign-offs for this job</h3>${jobCard(job)}</div>` : ""}
       ${docs ? `<div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 8px;font-size:16px">SOPs and SWMS for this job</h3><div style="display:flex;flex-wrap:wrap;gap:6px">${docs}</div></div>` : ""}
-      <div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 8px;font-size:16px">Forms for this job (${fs.length})</h3>
+      <div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 8px;font-size:16px">Forms done on this job (${fs.length})</h3>
         ${fs.length ? `<div class="list" style="overflow:auto"><table><thead><tr><th>Template</th><th>Title</th><th>Status</th><th>Updated</th></tr></thead><tbody>${recent}</tbody></table></div>` : `<span style="color:${MUTED}">No forms for this job yet.</span>`}</div>
-      <div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 8px;font-size:16px">Start a form for this job</h3><p style="font-size:13px;color:${MUTED};margin:0 0 10px">The job is filled in for you.</p>${tplHtml}</div>
     </div>`;
   }
   window.CUSTOM_VIEWS = Object.assign(window.CUSTOM_VIEWS || {}, { job: renderProject });
