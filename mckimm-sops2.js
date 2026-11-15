@@ -1,0 +1,631 @@
+/* ================================================================
+   McKimm Civil - further SOPs (batch of 21), 15 Nov 2026
+   Loaded AFTER mckimm-training.js. Each SOP is a read-and-sign document with its
+   own practical sign-off checklist (added to the Training Record) and an entry in
+   the Training & Policies library and matrix.
+
+   Doc IDs:  MCK-SOP-TRAFFIC-01  INCIDENT-01  INDUCT-01  SILICA-01  CHIPPER-01  SAW-01
+             CHEM-01  TRUCK-01  FINDS-01  FIT-01  PSYCH-01  BIT-01  PRECAST-01  ESC-01
+             WKSHOP-01  WASTE-01  CONTR-01  ALONE-01  WINTER-01  HEIGHTS-01  CONFINED-01
+
+   ADDING ANOTHER ONE: copy any reg({...}) block below.
+   ================================================================ */
+(function(){
+  if (typeof TEMPLATES === "undefined" || !window.MCK_DOCS || !window.MCK_TRAIN) return;
+  const { N, sopTemplate } = MCK_DOCS;
+  const T = MCK_TRAIN;
+  const REVIEW = "15 November 2027";
+  const ul = a => "<ul>" + a.map(x => "<li>" + x + "</li>").join("") + "</ul>";
+  const ol = a => "<ol>" + a.map(x => "<li>" + x + "</li>").join("") + "</ol>";
+  function body(c){
+    if (Array.isArray(c)) return ul(c);
+    if (c && typeof c === "object") return (c.p ? "<p>" + c.p + "</p>" : "") + (c.l ? ul(c.l) : "") + (c.o ? ol(c.o) : "") + (c.a ? "<p>" + c.a + "</p>" : "");
+    return "<p>" + c + "</p>";
+  }
+
+  function reg(o){
+    const topic = o.name + " (" + o.id + ")";
+    const blocks = [N("hdr", "info", "<p><strong>McKimm Civil Pty Ltd" + (o.skips ? " / Snowy Skips" : "") + "</strong> &nbsp;|&nbsp; Doc: <strong>" + o.id + "</strong> &nbsp;|&nbsp; Version 1.0 &nbsp;|&nbsp; Date: 15 Nov 2026 &nbsp;|&nbsp; Owner: Al McKimm (Site Supervisor)<br>Applies to: " + o.applies + "</p>")];
+    o.sections.forEach((s, i) => blocks.push(N("s" + (i + 1), s[0], "<h4>" + (i + 1) + ". " + s[1] + "</h4>" + body(s[2]))));
+    blocks.push(N("sign", "info", "<h4>" + (o.sections.length + 1) + ". Training and sign-off</h4><ul><li>All workers must read this SOP and be shown the task by the supervisor <strong>before doing it unsupervised</strong>.</li><li>Workers sign in McKimm Field to confirm they have read and understood it.</li><li>The supervisor records the practical on the <strong>Training Record &amp; Practical Sign-off</strong> form" + (o.comp ? " and, for this task, on the <strong>Competency Sign-off</strong> form" : "") + ".</li><li>Review: annually, after any incident or near miss, or when the work or equipment changes. Review due " + REVIEW + ".</li></ul>"));
+    const t = sopTemplate({ id:o.id, code:o.id, name:"SOP - " + o.name, version:"v1.0", icon:o.icon, category:"Policies", title:"Standard Operating Procedure — " + o.name, blocks, ackTail:o.ack });
+    const i = TEMPLATES.findIndex(x => x.id === t.id);
+    if (i > -1) TEMPLATES[i] = t; else TEMPLATES.push(t);
+
+    // practical checklist in the Training Record
+    const on = { field:"tr_topic", equals:topic };
+    const fields = [{ id:"px_" + o.key + "_note", label:"", type:"notice", variant:"info", showIf:on, html:"<p>Based on " + o.id + ". Watch the worker do each item, or ask them to explain it. Choose <strong>Yes</strong> only for what you saw or heard done correctly.</p>" }]
+      .concat(o.checks.map((c, n) => ({ id:"px_" + o.key + "_" + (n + 1), label:c, type:"chips", options:["Yes", "No – repeat"], showIf:on })));
+    const sec = { id:"p_" + o.key, title:"Practical check — " + o.short, fields };
+    const ri = T.training.sections.findIndex(s => s.id === "result");
+    T.training.sections.splice(ri < 0 ? T.training.sections.length : ri, 0, sec);
+    const pi = T.TOPICS.indexOf("Plant operation (machine-specific induction)");
+    if (T.TOPICS.indexOf(topic) < 0) T.TOPICS.splice(pi < 0 ? T.TOPICS.length : pi, 0, topic);
+
+    // library + crew phones
+    const label = "SOP — " + o.name;
+    if (!T.DOCS.some(d => d.tid === o.id)) T.DOCS.push({ tid:o.id, title:label, code:o.id, owner:"Al McKimm", review:REVIEW, practical:true, topic, kind:"Policy / SOP", isNew:true, group:o.group || "" });
+    if (window.MCK_PROJ && MCK_PROJ.CREW_DOCS && !MCK_PROJ.CREW_DOCS.some(x => x[0] === o.id)) MCK_PROJ.CREW_DOCS.push([o.id, label]);
+    if (o.comp && T.COMP_TASKS.indexOf(o.comp) < 0) T.COMP_TASKS.splice(T.COMP_TASKS.length - 1, 0, o.comp);
+  }
+
+  /* ============================ 1. TRAFFIC ============================ */
+  reg({ id:"MCK-SOP-TRAFFIC-01", key:"traffic", icon:"🚧", name:"Working Near Traffic & Plant/Pedestrian Interface", short:"working near traffic",
+    applies:"everyone working beside or entering a road, and everyone working around moving plant and trucks, on site, in the depot and at Snowy Skips jobs.",
+    ack:" I understand that I must not direct or stop traffic, and that I must never approach moving plant until the operator has agreed.",
+    checks:["Can say who may set up, change or remove traffic control devices, and that nobody directs or stops traffic without a current ticket",
+      "Knows to work only to the approved Traffic Guidance Scheme (TGS) and to stop and call the Supervisor if it does not match the site",
+      "Wears the right hi-vis, stays behind barriers, parks inside the protected area, and never turns their back on traffic they cannot see",
+      "Enters and leaves the road only when it is clear, with a spotter standing off the carriageway; never reverses onto a road without one",
+      "Makes eye contact and gets the operator's OK before going near plant; knows the blind spots and the exclusion zones",
+      "Knows what to do if a vehicle enters the works, or a near miss happens"],
+    sections:[
+      ["info","Purpose","To protect workers and the public from moving traffic, and from our own plant and trucks. It covers roadside work, entering and leaving roads, and the way people and plant share a site or the depot."],
+      ["danger","Who may do what (traffic control)",{ l:[
+        "<strong>Nobody on this crew directs, stops or holds traffic</strong> unless they hold a current <strong>Traffic Controller</strong> ticket. No work is done on the live carriageway by our own people.",
+        "Only a worker who holds a current ticket to <strong>implement traffic guidance schemes</strong> may set up, change or remove signs, cones and barriers. The Supervisor checks who holds it <em>before</em> the job. If nobody does, a traffic contractor installs and removes the devices.",
+        "Work only to a <strong>Traffic Guidance Scheme (TGS)</strong> or Traffic Management Plan approved by the road authority (Council or Transport for NSW), prepared to AS 1742.3 and the TfNSW <em>Traffic Control at Work Sites</em> manual. Keep a copy on site. If the site does not match the TGS, <strong>stop and call the Supervisor</strong>.",
+        "If traffic needs to be stopped, held, diverted or the road narrowed, stop work and call the Supervisor."] }],
+      ["warning","Before the job",{ o:[
+        "Get the approved TGS, any road occupancy licence or Council permit, and read them. Check you have the current version.",
+        "Brief everyone: where to park, where the safe walking route is, where plant works, the entry and exit, speed limits and who the Supervisor is.",
+        "Check devices at the start of the day, after wind or rain, after any vehicle strike, and when you leave. Fix a damaged or moved sign before work goes on.",
+        "Plan deliveries so trucks do not queue on the road or reverse onto it."] }],
+      ["warning","Working beside a road",[
+        "Wear <strong>hi-vis (day and night as the job needs)</strong>, safety boots and a hard hat.",
+        "Stay inside the barriers or the protected zone. Park vehicles off the carriageway or inside the protected area.",
+        "Never stand with your back to traffic you cannot see. Keep eyes up. Do not use a phone or wear earbuds near traffic.",
+        "Plant never swings, reaches or drops material over a live lane. Keep the machine inside the work area.",
+        "Keep time on the roadside short. Do the work that does not need to be at the road somewhere else."]],
+      ["danger","Entering and leaving the road",[
+        "Enter or leave only when the road is <strong>clear both ways</strong>. Use a <strong>spotter</strong> who stands off the carriageway where the driver can see them.",
+        "<strong>Never reverse onto a road without a spotter.</strong> Slow right down at the gate. Keep the gate area clear of dirt and mud.",
+        "Trucks turn their hazard lights or beacon on and give a long, clear lead to other traffic."]],
+      ["danger","Plant and people on the same site (and in the depot)",[
+        "<strong>Make eye contact and get the operator's OK</strong> before you go near a machine. Do not approach until they agree. If they cannot see you, you are in a blind spot.",
+        "Know the exclusion zones: stay out of the machine's swing, reach and travel path (see the Mobile Plant SWMS and the Safe Working Zones picture).",
+        "A spotter stands in the operator's line of sight, never in the slew zone and never behind a reversing machine.",
+        "Keep separate routes for people and plant. Use marked walkways. Do not walk behind reversing plant or trucks.",
+        "Depot speed limit <strong>10 km/h</strong>. Visitors, customers and drivers are met at the gate and escorted. No phones while walking among plant.",
+        "Leave plant parked on level ground with the bucket on the ground and the keys out."]],
+      ["info","If something goes wrong",[
+        "A vehicle enters the works, someone is struck, or there is a near miss: <strong>stop work, make people safe</strong>, call 000 if anyone is hurt, call Al on 0408 632 007, then report it on the Incident / Hazard Report.",
+        "A traffic strike on a worker, or a crash involving plant, is notifiable if it causes a serious injury. See the Incident SOP."]]
+    ] });
+
+  /* ============================ 2. INCIDENT ============================ */
+  reg({ id:"MCK-SOP-INCIDENT-01", key:"incident", icon:"🚑", name:"Incident, Injury & Near-Miss Reporting and Emergency Response", short:"incident reporting and emergency response",
+    applies:"everyone: employees, casuals, subcontractors and visitors, on every site, in the depot and in the trucks.",
+    ack:" I understand I must report every injury, near miss and hazard, and that I can ring 000 and the Supervisor at any time.",
+    checks:["Can say the first steps: stop work and make safe, help anyone hurt, ring 000 for anything serious, then ring Al",
+      "Can give 000 a clear location (the job address or Rockwell Road details, or 8-10 Basalt Street) and describe what happened",
+      "Knows what a notifiable incident is and that SafeWork NSW is told immediately on 13 10 50, and the scene is left alone",
+      "Has seen where the first aid kits, extinguishers and spill kits are on the ute, truck and depot",
+      "Can open the Incident / Hazard Report in McKimm Field and fill it in, with photos",
+      "Knows there is no blame for reporting, and that near misses and hazards are reported too"],
+    sections:[
+      ["info","Purpose","To make sure every injury, near miss and hazard is dealt with, recorded and learned from, to meet the duty to notify SafeWork NSW, and to respond to an emergency quickly. It is a core part of our ISO 45001 system."],
+      ["info","What must be reported",{ l:["Any injury or illness caused by work, however small.","Any <strong>near miss</strong>: something that could have hurt someone or damaged something.","Property, plant, vehicle or service damage; spills; fires; strikes on services.","Unsafe conditions and hazards you notice. A complaint or concern from a customer, neighbour or the public.","Anything that makes you think &ldquo;that should not have happened&rdquo;."], a:"<strong>Nobody is in trouble for reporting.</strong> Reporting is how we fix things. Do not hide or play down an incident." }],
+      ["danger","What to do first (in this order)",{ o:[
+        "<strong>Stop work and make it safe.</strong> Shut down machines and keep people clear of the danger (traffic, plant, power lines, trench, fire).",
+        "<strong>Help anyone who is hurt.</strong> Give first aid within your training. Do not put yourself in danger.",
+        "<strong>Call 000</strong> for any serious injury, fire, gas leak, electric shock or if someone is trapped.",
+        "<strong>Call Al on 0408 632 007</strong> (or the Supervisor on site).",
+        "<strong>Do not disturb the scene</strong> except to help people or make it safe. Take photos.",
+        "<strong>Report it</strong> in McKimm Field (Incident / Hazard Report) the same day, before you leave site. Injuries are reported straight away."] }],
+      ["danger","Ringing 000",{ l:["Say what you need: ambulance, fire or police.","Give the <strong>location</strong>: the job address, or the depot (<strong>8-10 Basalt Street, Berridale NSW 2628</strong>), the nearest cross street or landmark. For Rockwell Road: <em>Rockwell Road, Berridale, near 21 Boundary Street (Lot 5 DP1294499)</em>.","Say what happened, how many are hurt and any danger (power lines, fuel, trench, traffic).","Stay on the line and send someone to meet the ambulance at the gate."] }],
+      ["danger","Notifiable incidents (SafeWork NSW)",{ p:"The law requires the business to notify SafeWork NSW <strong>immediately</strong> after becoming aware of a notifiable incident, by calling <strong>13 10 50</strong>. A <em>notifiable incident</em> is:", l:[
+        "<strong>A death.</strong>",
+        "<strong>A serious injury or illness</strong>: for example, a person who needs immediate treatment as an in-patient in hospital, immediate treatment for an amputation, a serious head or eye injury, a spinal injury, a serious burn, a serious laceration, loss of a bodily function, or exposure to a substance that needs immediate treatment.",
+        "<strong>A dangerous incident</strong>, even if nobody is hurt: for example electric shock, an uncontrolled escape of gas, fuel or chemicals, an explosion or fire, a fall of plant or a load, <strong>plant overturning</strong>, a <strong>collapse of an excavation or trench</strong>, or a structure collapse."],
+        a:"<strong>Leave the scene undisturbed</strong> (except to help people or make it safe) until SafeWork NSW says it can be changed. Al makes the call. If Al cannot be reached, any worker rings 13 10 50. Written notice follows within 48 hours if SafeWork NSW asks for it. Al also tells the workers compensation insurer, and, where the contract needs it, the principal contractor or Council, and decides whether the EPA (131 555) must be told of a pollution incident." }],
+      ["warning","After the report",{ l:["The Supervisor looks at every report <strong>within 24 hours</strong> and talks to the people involved.","Serious or repeat events are investigated: what happened, why (the cause, not who to blame), and what will stop it happening again.","Corrective actions are recorded, given a date and an owner, and checked. Anything that needs a document changed (a SWMS, an SOP) is changed.","What we learn is shared at the next toolbox talk.","A worker returning after an injury needs a medical clearance and an agreed plan (light duties if needed) with the Supervisor."] }],
+      ["warning","First aid, fire and spills",{ l:["Al is the appointed first aider (HLTAID011). First aid kits are in the site office, the utes and the trucks, and are checked monthly. Everyone should know where they are.","<strong>Fire:</strong> small fire and safe to do so, use the extinguisher. Otherwise move away, call 000, warn others and call Al. Extinguishers are tagged and in date.","<strong>Spills:</strong> follow the spill steps in the Fuel SOP and the Chemicals SOP. Protect drains and waterways first."] }],
+      ["info","Emergency numbers",{ l:["<strong>000</strong> ambulance, fire, police","<strong>Al McKimm</strong> 0408 632 007","<strong>SafeWork NSW</strong> 13 10 50 (notifiable incidents)","<strong>EPA Environment Line</strong> 131 555 (pollution)","<strong>Essential Energy</strong> 13 20 80 (power); <strong>Telstra</strong> 13 22 03 (damage)","<strong>Dial Before You Dig</strong> 1100","<strong>Poisons Information Centre</strong> 13 11 26","<strong>Lifeline</strong> 13 11 14 (anyone struggling after an incident)"] }]
+    ] });
+
+  /* ============================ 3. INDUCTION ============================ */
+  reg({ id:"MCK-SOP-INDUCT-01", key:"induct", icon:"🆕", name:"New Starter Induction & Supervision of Casual and Inexperienced Workers", short:"new starter induction",
+    applies:"every new employee, casual, labour-hire worker, apprentice or trainee, and the supervisors who look after them.",
+    ack:" I understand I must not operate plant or do high-risk tasks until the Supervisor has signed me off, and that I work with an experienced person until then.",
+    checks:["Has been shown the emergency arrangements: meeting point, first aid kit, extinguisher, phone coverage, who to call",
+      "Knows they can stop work at any time if it is unsafe, and who to tell",
+      "Has read and signed the documents for the tasks they will do first (and knows which ones they cannot do yet)",
+      "Knows how to open McKimm Field, complete the timesheet and daily report, and report an incident or hazard",
+      "Has shown their licences and tickets (originals sighted and recorded on the Training Record)",
+      "Knows who their buddy or supervisor is and that they are not to work alone until signed off"],
+    sections:[
+      ["info","Purpose","Your crew can grow from three to about eight for a few months. New and casual workers are the most likely to be hurt, so everyone gets the same induction and a clear list of what they may and may not do until they are signed off."],
+      ["warning","Before day one",{ l:["Sight the originals of: <strong>white card</strong> (General Construction Induction), driver licence (class), any <strong>high risk work licence</strong> or ticket, first aid certificate. Record what you sighted on the <strong>Training Record</strong> (topic: Licence, ticket or course sighted). Do not take it on trust.","Collect an emergency contact and, if they want to share it, anything they would like us to know that could affect their safety at work.","Give them the PPE they need (hi-vis, boots, hard hat, glasses, hearing protection, gloves) and check it fits.","<strong>Labour-hire workers:</strong> the agency makes sure they are suitable; we still do this induction because we direct the work."] }],
+      ["danger","Day-one induction (the Supervisor goes through every item)",{ o:[
+        "Welcome, hours, breaks, who the Supervisor is (Al, 0408 632 007) and who to call if he is not there.",
+        "<strong>Emergency:</strong> meeting point, first aid kit, extinguisher, spill kit, mobile coverage, how to call 000, how to give the location.",
+        "<strong>Stop-work authority:</strong> anyone can stop work if it is unsafe and must tell the Supervisor.",
+        "<strong>Hazards on our sites:</strong> traffic, moving plant, excavations and trenches, underground services and power lines, heavy lifting, weather.",
+        "<strong>Rules:</strong> PPE; no alcohol or drugs (see the Fitness for Work SOP); phones; smoking only where allowed; respect at work (see the Psychosocial SOP).",
+        "<strong>Read and sign</strong> the documents for the first tasks: the Mobile Plant SWMS, Excavation, Manual Handling, Working Near Traffic, Incident Reporting, and any others for the job. The Supervisor explains them.",
+        "<strong>McKimm Field:</strong> logging in, timesheet, daily report, pre-start, how to report an incident or hazard.",
+        "Show the site: amenities, drinking water, the safe walking routes, exclusion zones and no-go areas."] }],
+      ["danger","What a new starter may and may not do until signed off",{ l:[
+        "<strong>May:</strong> general labouring, hand tools they have been shown, spotting once trained, cleaning up, driving a vehicle they hold the licence for and have been signed off on.",
+        "<strong>May not</strong> until the Supervisor has signed them off on the <strong>Competency Sign-off</strong> form: operate any plant or truck, use a chainsaw, chipper or road saw, sling or direct a lift, work with hot bitumen, work in a trench, set up traffic control, or work alone.",
+        "They work <strong>alongside an experienced worker</strong> (a buddy) who looks after them for at least the first week. The buddy is told what the new starter can and cannot do."] }],
+      ["warning","Supervision and follow-up",{ l:["The Supervisor watches the new starter do the task before signing them off. <strong>Experience on a CV is not a sign-off</strong>: it is checked on our machines and our methods.","Check in at the <strong>end of day one, after one week and after one month</strong>: what went well, what needs work, any concerns. Note it on the Training Record.","Correct unsafe work straight away, kindly and clearly. Repeat training if needed.","Casuals who return after a long gap get a short refresher and a check that nothing has changed."] }],
+      ["info","Subcontractors and visitors","Subcontractors and visitors follow the Contractors and Visitors SOP, not this one."]
+    ] });
+
+  /* ============================ 4. SILICA ============================ */
+  reg({ id:"MCK-SOP-SILICA-01", key:"silica", icon:"💨", name:"Cutting Concrete, Silica Dust & Dust Control", short:"concrete cutting and silica dust",
+    applies:"anyone who cuts, grinds, drills, breaks, sweeps or loads concrete, masonry, stone, mortar, sand or dusty soil, including the road saw, and anyone working nearby.",
+    ack:" I understand there is no safe amount of silica dust, that I must never dry cut, and that I must wear the respirator the Supervisor tells me to wear.",
+    comp:"Concrete road saw and cutting (wet cutting, silica dust control)",
+    checks:["Can explain why silica dust is dangerous and why a dust mask is the last control, not the first",
+      "Sets up the road saw with the water feed running before cutting, and does not cut dry",
+      "Has checked the blade, the guard and the area (rebar, services, bystanders) and set an exclusion zone",
+      "Wears the right respirator, fitted and seal-checked, plus eye, face, hearing and skin protection",
+      "Deals with slurry properly: contained, not washed to a drain or creek",
+      "Cleans up wet or with an H-class vacuum, never by dry sweeping or compressed air"],
+    sections:[
+      ["info","Purpose and the hazard","Concrete, brick, stone, mortar, sand and many soils contain <strong>crystalline silica</strong>. Cutting, grinding, drilling, breaking and sweeping them makes a fine dust you cannot see that goes deep into your lungs. It causes <strong>silicosis, lung cancer, kidney disease</strong> and other illness, often years later. There is <strong>no safe amount</strong>, and a dust mask alone is not enough."],
+      ["warning","Where we make silica dust",{ l:["The <strong>Husqvarna road saw</strong> (600 mm blade), core drills, grinders and breakers on concrete and asphalt.","Cutting, shaping or breaking concrete blocks, pavers, pipes and headwalls.","Dry sweeping, power brooming (including the <strong>sand on the tennis courts</strong>), blowing dust, and loading or tipping dusty material.","Mixing dry cement or dry concrete mix."] }],
+      ["danger","The rules",{ l:["<strong>Never dry cut.</strong> Use a saw with a <strong>water feed</strong> running, or on-tool extraction connected to an H-class (HEPA) vacuum.","We do <strong>not</strong> cut engineered stone. It is banned in Australia.","Cut less: plan the job so less cutting is needed (use the right length, saw joints at planned places, use a breaker or splitter where suitable).","Keep other people out. Set an <strong>exclusion zone</strong> (at least 5 m, more downwind) and tell the crew. Work upwind where you can.","Do not take dusty clothes into the cab or the lunch area."] }],
+      ["danger","Using the road saw",{ o:[
+        "<strong>Check the blade:</strong> right type for the material, segments good, not cracked or glazed, rated for the saw speed, fitted the right way. Check the guard is on and the water feed and hose work.",
+        "<strong>Check the ground:</strong> scan or mark rebar and services before cutting. Do not cut near a live service (see the Services SOP). Make sure nobody is under or beside the cut.",
+        "Wear eye and face protection, hearing protection, gloves, boots, long sleeves and the respirator.",
+        "Start the water <strong>before</strong> the blade touches the concrete. Keep it running for the whole cut.",
+        "Stand to the side of the blade, never in line with it. Keep the saw straight and let the blade do the work. Watch for <strong>kickback</strong> if it binds or pinches.",
+        "Switch off, let the blade stop, then lift it. Never leave a running saw."] }],
+      ["warning","Respirators (the last line of defence)",{ l:["The Supervisor chooses the respirator. A disposable <strong>P2</strong> is the minimum; a <strong>P3</strong> or a half-face mask with P3 filters is needed for heavier dust. It must meet AS/NZS 1716.","It must <strong>seal</strong>. Facial hair under the seal means it will not work. Do a fit check every time you put it on. Replace it when it is damp, damaged or hard to breathe through.","A mask does not replace water or extraction, and it does not protect people nearby."] }],
+      ["warning","Slurry, clean-up and the environment",{ l:["Saw slurry is <strong>alkaline and carries cement</strong>. Contain it with a bund or a drip tray, let it settle, scoop or vacuum it and dispose of it as the Supervisor tells you. <strong>Never wash it into a drain, gutter or creek.</strong>","Clean up <strong>wet</strong> or with an H-class vacuum. <strong>Never dry sweep or use compressed air</strong> on dust.","Wash your hands and face before eating, drinking or smoking. Wash work clothes at work or separately from the family wash where you can."] }],
+      ["info","Health","Tell the Supervisor if you have a cough, breathlessness or chest problems. If the risk assessment says you are regularly exposed, the Supervisor arranges <strong>health monitoring</strong> (lung function and chest checks). See the Chemicals SOP for the register."]
+    ] });
+
+  /* ============================ 5. CHIPPER ============================ */
+  reg({ id:"MCK-SOP-CHIPPER-01", key:"chipper", icon:"🪵", name:"Wood Chipper (Vermeer BC1000XL)", short:"wood chipper",
+    applies:"anyone who operates, feeds, tows, services or works near the wood chipper.",
+    ack:" I understand the chipper can kill, that I must never reach into the feed, and that I do not operate it until the Supervisor has signed me off.",
+    comp:"Vermeer chipper (BC1000XL)",
+    checks:["Wears the PPE: helmet with face screen, hearing protection, close-fitting clothing with no loose cuffs or jewellery",
+      "Did the pre-start: guards, feed table, stop and reverse controls tested, discharge chute, knives and fluids; set up on level ground",
+      "Set the discharge away from people, roads and buildings and set an exclusion zone; is not working alone",
+      "Feeds butt-first, stands to the side, never reaches into the hopper, and lets go as soon as the rollers take the branch",
+      "Stops the machine, switches off and removes the key before clearing a jam or changing knives",
+      "Knows what to do if someone is being pulled in: hit the stop or reverse control at once, then ring 000"],
+    sections:[
+      ["info","Purpose","The Vermeer BC1000XL pulls in timber with feed rollers and cuts it with a rotating drum. <strong>People have been killed by being pulled into chippers.</strong> This SOP sets the rules for its use."],
+      ["danger","Who may use it",{ l:["Only a worker who has read the <strong>Vermeer operator's manual</strong>, has read this SOP and has been signed off on the <strong>Competency Sign-off</strong> form.","Trainees use it only with a signed-off operator standing next to them.","<strong>Never operate it alone.</strong> A second person stays within sight of the operator, knows where the emergency stop is and can call for help."] }],
+      ["warning","PPE and clothing",["Helmet with a face screen or glasses and visor, <strong>hearing protection</strong>, gloves that fit closely, safety boots, long-sleeved close-fitting clothing.","<strong>No loose clothing, loose cuffs, drawstrings, scarves, jewellery or dangling items.</strong> Tie up long hair.","P2 dust mask for dusty or mouldy material."]],
+      ["warning","Pre-start and set-up",{ o:[
+        "Park on <strong>level, firm ground</strong> with the park brake on and the wheels chocked if needed.",
+        "Check <strong>all guards</strong> are in place. Test the <strong>emergency stop and the feed stop and reverse control</strong>. Check the feed table and hopper, belts, discharge chute and its guard, knives and anvil (sharp, secure and not cracked), fluids and leaks, and fire extinguisher.",
+        "Turn the <strong>discharge away</strong> from people, roads, vehicles, buildings and power lines.",
+        "Set an <strong>exclusion zone</strong> (at least 10 m, wider on the discharge side) with cones or tape. Keep bystanders and pets out.",
+        "Clear the area around the machine of trip hazards. Stack the material so it can be fed easily."] }],
+      ["danger","Feeding the chipper",{ l:["<strong>Feed butt end first.</strong> Stand to the <strong>side</strong>, never directly in line with the feed. Keep the feed table clear.","<strong>Never reach over or into the hopper, and never put your hands or feet past the feed table.</strong> Push short pieces with the next branch or a push stick, never by hand.","<strong>Let go the moment the rollers take the branch.</strong> Do not hold on. Branches can whip and pull you in.","Feed one branch at a time and do not overfill. Do not force material in.","Check for <strong>wire, nails, stones, metal or soil</strong> before feeding. They damage the knives and throw out pieces.","Stop the feed (reverse control) if anything looks wrong."] }],
+      ["danger","Jams, adjustments and knives",["<strong>Never clear a jam, adjust or change knives with the engine running.</strong>","Stop the feed, switch off the engine, <strong>remove the key</strong>, wait until the drum has stopped, and lock out if the manual says so. Then use a tool or a stick, not your hands.","Knife changes and servicing are done as the manual says, with the right tools and gloves. Any safety defect is repaired by a qualified mechanic."]],
+      ["warning","Other hazards",["<strong>Noise and dust:</strong> hearing protection at all times. Dust mask when needed.","<strong>Thrown material:</strong> keep clear of the discharge. Keep the screen down.","<strong>Fire:</strong> the engine and chips are hot. Refuel only when cool (see the Fuel SOP). Keep chips away from ignition and do not burn them.","<strong>Weeds and biosecurity:</strong> do not chip noxious weeds or plant matter from a restricted area. Clean the machine before moving it between properties (see the Erosion, Sediment and Washdown SOP).","<strong>Power lines:</strong> we do not cut or drop trees near power lines. Call Essential Energy or a qualified arborist.","<strong>Towing and moving:</strong> lock the discharge chute and hopper, check the hitch, safety chain, tyres and lights. See the Trucks SOP."]],
+      ["danger","Emergency",["<strong>If a person is caught or being pulled in: hit the emergency stop or reverse control at once</strong>, call 000, then Al. Do not try to pull the person free while the rollers are turning.","Any entanglement, near miss or injury is reported the same day. A serious injury is notifiable to SafeWork NSW (see the Incident SOP)."]]
+    ] });
+
+  /* ============================ 6. CHAINSAW ============================ */
+  reg({ id:"MCK-SOP-SAW-01", key:"saw", icon:"🪚", name:"Chainsaw & Pole Saw Use", short:"chainsaw use",
+    applies:"anyone who uses, carries, maintains or works near a chainsaw or pole saw (Husqvarna, Stihl and others in the depot).",
+    ack:" I understand I only use a chainsaw if the Supervisor has signed me off, I do not fell large trees or work near power lines, and I wear the full protective gear.",
+    comp:"Chainsaw use",
+    checks:["Wears chainsaw trousers or chaps, helmet with visor and ear muffs, cut-resistant boots and gloves",
+      "Checked the saw: chain brake, chain tension and sharpness, guards, throttle lock, bar oil, handles, and fuel mix",
+      "Knows the limits: does not fell large trees, work near power lines, cut above shoulder height or work from a ladder",
+      "Starts and carries the saw correctly: on the ground, brake on, bar pointing back",
+      "Sets a clear escape route and exclusion zone, and looks up for hung branches before cutting",
+      "Refuels the right way: engine off and cool, on the ground, and restarts 3 m or more away"],
+    sections:[
+      ["info","Purpose","A chainsaw can cause deep cuts in a split second, and a falling tree or branch can kill. This SOP covers the chainsaws and pole saws we own, and sets the limits on what we do with them."],
+      ["danger","Who may use one and the limits",{ l:[
+        "Only a worker who has been <strong>signed off on the Competency Sign-off form</strong>, with a recognised chainsaw course or proven experience recorded by the Supervisor.",
+        "<strong>We cut up fallen timber and fell only small trees</strong> that can be cut with a single cut and dropped into a clear area at least twice the tree's height.",
+        "<strong>We do not:</strong> fell large trees; fell near buildings, roads, fences or <strong>power lines</strong>; cut hung-up or spring-loaded trees; climb trees; or cut from a ladder, a vehicle or a platform. Call a qualified arborist or the Supervisor.",
+        "<strong>Power lines:</strong> assume every line is live. Keep to the distances in the Electric Lines SOP. A pole saw is a long conductive tool, so <strong>count its full reach</strong>. If lines are close, do not use it.",
+        "Never use a chainsaw alone (see the Working Alone SOP). Another person stays within contact."] }],
+      ["warning","PPE",["<strong>Chainsaw trousers or chaps</strong>, a <strong>helmet with mesh visor and ear muffs</strong>, cut-resistant safety boots, close-fitting gloves, hi-vis.","No loose clothing or jewellery. Tie back long hair.","First aid kit with a trauma dressing nearby."]],
+      ["warning","Before you start",{ o:[
+        "<strong>Check the saw:</strong> chain brake works, chain is sharp and at the right tension, chain catcher, guards and handles secure, throttle lock works, bar and chain oil full, no fuel leaks, muffler and spark guard fitted.",
+        "Check the correct 2-stroke fuel mix. Safety checks on every chainsaw are done every 6 months (12 months if unused) and recorded in the Asset Register.",
+        "Look at the job: the lean of the tree, hung-up branches (&ldquo;widow-makers&rdquo;), dead branches, wind, tension in logs, slopes and the ground you will stand on.",
+        "Clear the area, set an <strong>exclusion zone</strong> (at least 2 x the tree height for felling, 5 m for cutting) and plan <strong>two escape routes</strong> at about 45 degrees behind you."] }],
+      ["danger","Using the saw",["<strong>Start it on the ground</strong> with the chain brake on, never held in the air or between your legs. Keep a firm stance.","Hold it with <strong>both hands</strong>, thumb wrapped around the handle. Keep the bar close to your body and below shoulder height. <strong>Never cut above shoulder height.</strong>","Do not let the tip of the bar touch anything. That is where <strong>kickback</strong> comes from. Cut at full throttle.","Release the trigger and apply the chain brake before you move your feet. <strong>Carry it with the engine off, or with the chain brake on and the bar pointing backward.</strong>","In logs under tension, cut on the compression side first. Do not cut through logs on a slope that could roll.","Stop if you are tired. Take breaks to reduce vibration and fatigue."]],
+      ["warning","Refuelling and care",["Refuel on the ground, <strong>engine off and cool</strong>, away from ignition. Restart at least <strong>3 m</strong> from where you fuelled. Petrol is never carried in the cab (see the Fuel SOP).","Clean the saw and store it with the bar cover on. Report any fault or damage and do not use it until it is fixed. Safety defects are repaired by a qualified person."]],
+      ["info","Injury and emergency","Severe bleeding: direct pressure, call 000, then Al. A cut, near miss or kickback is reported the same day. A serious injury is notifiable (see the Incident SOP)."]
+    ] });
+
+  /* ============================ 7. CHEMICALS ============================ */
+  reg({ id:"MCK-SOP-CHEM-01", key:"chem", icon:"🧪", name:"Hazardous Chemicals, SDS & Storage", short:"hazardous chemicals and SDS",
+    applies:"anyone who buys, stores, handles, decants or disposes of chemicals: fuels, oils, degreasers, cement and concrete mix, admixtures, bitumen and emulsion, aerosols, paints, gases and battery acid.",
+    ack:" I understand I read the label and SDS before using a chemical, I never use an unlabelled container, and I report a spill or exposure straight away.",
+    checks:["Knows where the SDS folder or register is, and can find the SDS for a chemical and read the first aid and PPE sections",
+      "Reads the label before first use, uses the right PPE, and does not mix chemicals",
+      "Knows decanted containers must be labelled and that no chemical goes in a food or drink container",
+      "Handles wet cement and concrete correctly: gloves, long sleeves, eye protection, and washes it off straight away",
+      "Can describe the spill steps and the first aid for eyes, skin and swallowing, and the Poisons Information number",
+      "Knows chemicals are stored locked, bunded and separated, and that waste goes to the right place"],
+    sections:[
+      ["info","Purpose","To handle every chemical we use safely and keep the information (labels, Safety Data Sheets and a register) up to date. It supports ISO 45001 and ISO 14001. Fuel is covered in more detail in the Fuel SOP."],
+      ["warning","What we have",["<strong>Fuels and oils:</strong> diesel, petrol, 2-stroke mix, engine and hydraulic oil, grease, coolant, AdBlue.","<strong>Cleaners and solvents:</strong> degreasers, brake cleaner, aerosols, marking paint.","<strong>Concrete products:</strong> cement, dry concrete mix, admixtures such as plasticiser, curing compounds, expanding demolition agents if used.","<strong>Road products:</strong> bitumen, bitumen emulsion, cutter, tack coat (see the Bitumen SOP).","<strong>Gases and batteries:</strong> LPG, welding gases, battery acid. Weed spray and fertilisers if used."]],
+      ["danger","The rules",{ l:[
+        "<strong>Every chemical is on the Hazardous Chemicals Register</strong> and has a current <strong>Safety Data Sheet (SDS)</strong> (not more than 5 years old). The SDS folder is kept in the depot and on the phones. Ask the Supervisor <strong>before buying a new chemical</strong>.",
+        "<strong>Read the label and the SDS before first use.</strong> Use the chemical only for what it is made for, with the PPE the SDS names.",
+        "Keep chemicals in their <strong>original labelled containers</strong>. If you decant, label the new container with the name and hazard. <strong>Never use a food or drink container.</strong>",
+        "<strong>Never mix chemicals</strong> (for example bleach and acid cleaners). Use the quantity you need.",
+        "Do not eat, drink or smoke where chemicals are used. Wash your hands afterwards."] }],
+      ["danger","Wet cement and concrete",["Wet cement is <strong>alkaline</strong> and burns skin and eyes. Wear nitrile-lined gloves, long sleeves and long trousers worn <strong>outside</strong> the boots, and eye protection. Do not kneel in wet concrete.","If it gets on your skin or into a boot, <strong>wash it off at once</strong> with clean water and change contaminated clothing. If it gets in your eyes, flush with water for 15 minutes and get medical help.","Wet down dry cement and mix to avoid dust (see the Silica SOP)."]],
+      ["warning","Storage",["Store in a <strong>locked, covered, bunded area</strong>. Keep <strong>petrol and diesel in separate bunds</strong> (see the Fuel SOP). Keep gas cylinders upright, secured and away from ignition and fuel.","Separate incompatible products (acids and alkalis, oxidisers, flammables). Keep away from drains.","Keep a spill kit and an extinguisher at each store. The Supervisor checks stores monthly."]],
+      ["danger","If something goes wrong",{ l:["<strong>Eyes:</strong> flush with clean water for 15 minutes. <strong>Skin:</strong> remove contaminated clothing and wash. <strong>Swallowed:</strong> do not make the person vomit; call the <strong>Poisons Information Centre 13 11 26</strong>, or 000 if serious. Take the SDS.","<strong>Spill:</strong> stop the source, contain it, protect drains and waterways, absorb and bag it, report it. Follow the spill steps in the Fuel SOP.","Report every exposure and spill on the Incident / Hazard Report."] }],
+      ["warning","Waste","Used oil, oily rags, empty chemical containers, absorbent pads and contaminated soil go in the <strong>correct waste container at the depot</strong>, not in a general bin or skip bin, and not down a drain or onto the ground."]
+    ] });
+
+  /* ============================ 8. TRUCKS ============================ */
+  reg({ id:"MCK-SOP-TRUCK-01", key:"truck", icon:"🚚", name:"Trucks, Trailers, Towing & Loading Plant", short:"trucks, towing and loading plant",
+    applies:"everyone who drives a truck, ute or trailer for McKimm Civil or Snowy Skips, loads or unloads plant, or ties down a load.",
+    ack:" I understand I only drive vehicles I am licensed and signed off for, that every load is restrained, and that I do the pre-start before I drive.",
+    comp:"Trucks, trailers and plant float (loading, restraint and towing)",
+    checks:["Holds the right licence class for the vehicle's GVM and trailer, and knows where to read the GVM and tow ratings",
+      "Did the daily pre-start in McKimm Field and reports and tags out any defect",
+      "Restrains the load properly (right gear, enough points, rated chains or straps, cover for loose material) and checks it after the first few minutes",
+      "Loads and unloads plant safely: level ground, ramps, wheels chocked, spotter, four tie-down points, bucket lowered",
+      "Tows correctly: hitch and coupling secure, safety chains, brakes and lights, ball weight, and reverses with a spotter",
+      "Knows the tipper rules: look up, level ground, nobody near, tray down before moving; and what to do on a breakdown"],
+    sections:[
+      ["info","Purpose","To make driving, towing, loading and tipping safe, and to keep our vehicles legal. It covers the trucks (the tipper, the hook-lift and the bitumen truck), utes and trailers, and loading excavators and other plant. Under the Heavy Vehicle National Law, everyone in the chain (driver, loader, scheduler, owner) shares responsibility for a safe, legal load."],
+      ["danger","Licences and who may drive",["The driver holds the <strong>correct licence class</strong> for the vehicle. Read the GVM and GCM on the compliance plate. A rigid truck over 8 t GVM needs at least an MR licence. Check towing limits before hitching anything.","The Supervisor has signed the driver off on that vehicle on the <strong>Competency Sign-off</strong> form. Trainees drive only with a signed-off driver beside them.","No alcohol or drugs, and no driving when tired (see the Fitness for Work SOP). <strong>Seatbelts always.</strong> No hand-held phone."]],
+      ["warning","Pre-start and defects",["Do the <strong>daily pre-start</strong> in McKimm Field (Vehicle Log Book) before you drive: tyres and wheel nuts, brakes, steering, lights, beacon, mirrors, horn and reversing alarm, fluids, leaks, load restraint gear, tray locks, tailgate, extinguisher and spill kit.","Any defect that affects safety is reported and the vehicle is <strong>tagged out</strong>. A safety defect is repaired by a qualified mechanic. Registration and the yearly roadworthiness inspection are kept up to date."]],
+      ["danger","Load limits and restraint",{ l:["<strong>Never exceed the GVM, the GCM or any axle limit.</strong> If you are not sure, weigh it.","<strong>Every load is restrained</strong>, following the National Transport Commission <em>Load Restraint Guide</em>. Use rated chains, straps and binders with the working load limit marked, enough tie-down points, and edge protectors. Damaged or unrated gear is not used.","<strong>Cover loose or dusty loads</strong> (soil, spoil, gravel, rubbish) with a tarp or net so nothing falls or blows off. Do not overfill. Keep the load inside the tray.","Check the load and gear again after the first few minutes of driving and at each stop."] }],
+      ["danger","Loading and unloading plant (float and trailer)",{ o:[
+        "Park on <strong>level, firm ground</strong>, away from trenches and power lines. Park brake on and <strong>wheels chocked</strong>.",
+        "Use ramps that are rated for the machine, wide enough, in good condition and locked in place. Load forward or reverse as the machine's manual and the slope suggest.",
+        "Use a <strong>spotter</strong> who stands off to the side where the operator can see them, never behind or beside the ramp.",
+        "Drive on slowly and squarely. Do not steer on the ramp. Lower the bucket or blade to its lowest stable position.",
+        "<strong>Tie down at the manufacturer's tie-down points</strong> with rated chains and binders (four points for an excavator). Never attach around hydraulic cylinders or hoses. Check the tie-downs after a few minutes.",
+        "Check the combined height, width and length. <strong>Over-dimension or oversize loads need a permit and signs;</strong> ask the Supervisor before moving one."] }],
+      ["warning","Towing trailers",["Check the <strong>tow ratings</strong> of the vehicle and the coupling, and the trailer's mass. Keep the load balanced with about <strong>10 per cent</strong> of it on the ball.","Check the hitch and coupling are locked, the <strong>safety chains</strong> are crossed and attached, the brakes and breakaway work (trailers over 750 kg need brakes), the lights work, tyres and wheel nuts are good, and the jockey wheel is up.","Leave a bigger gap, slow for corners and crests, and take care in crosswinds. <strong>Reverse with a spotter</strong>."]],
+      ["danger","Tipping",["<strong>Look up first</strong> for power lines and branches. Tip only on <strong>level, firm ground</strong>, never on a slope or soft ground, and not in strong wind.","Nobody stands behind, beside or under a raised tray. Open the tailgate by the safe method. Do not climb on the tray to free a load.","<strong>Lower the tray fully</strong> and latch it before you move off. Never drive with the tray raised."]],
+      ["info","On the road and at breakdowns",["Drive to the conditions and the load. Allow for the extra height and weight. Follow the Winter Driving SOP in frost, ice and snow.","If you break down: pull off the road if you can, turn on hazard lights, put on your hi-vis, and stay clear of the traffic side. Call the Supervisor. Do not repair a truck on the roadside beside traffic.","Park on <strong>level ground</strong> with the park brake on, and chocks on a slope."]]
+    ] });
+
+  /* ============================ 9. UNEXPECTED FINDS ============================ */
+  reg({ id:"MCK-SOP-FINDS-01", key:"finds", icon:"⚠️", name:"Unexpected Finds: Asbestos, Contaminated Soil, Heritage & Human Remains", short:"unexpected finds",
+    applies:"everyone digging, demolishing minor structures, handling pipes or fill, or working in the skip business, anywhere we find something we did not expect.",
+    ack:" I understand that if I find something suspicious I stop, keep clear, do not touch it, and tell the Supervisor.",
+    checks:["Can name the common signs of asbestos (fibro sheeting, asbestos cement pipe, lagging, old vinyl tiles) and says 'stop, keep clear, do not touch'",
+      "Knows what not to do: do not break, drive over, sweep, hose or collect it, and do not put it in a bin",
+      "Knows the signs of contaminated soil (odour, staining, sheen, buried drums or rubbish) and what to do",
+      "Knows to stop work and keep plant and people off a possible Aboriginal object, relic or human remains, and to call the Supervisor",
+      "Can record a find: photo, location, time, and the Incident / Hazard Report",
+      "Knows work does not restart until the Supervisor has cleared it"],
+    sections:[
+      ["info","Purpose","On civil sites and in waste, we sometimes find things we did not expect. Handling them the wrong way can hurt people, pollute the land and water, or break the law. The rule is the same for all of them: <strong>STOP. KEEP CLEAR. DO NOT TOUCH. TELL THE SUPERVISOR.</strong>"],
+      ["danger","Asbestos",{ p:"Asbestos was used in many products until the 1980s, and it is common in the Snowy region: fibro sheeting and fences, <strong>asbestos cement (AC) pipes</strong> (water, drainage, culverts), roof sheets, lagging, flooring and old vinyl tiles, and in fill. Disturbing it releases fibres that can cause fatal lung disease.", l:[
+        "<strong>Stop work</strong> if you think you have found it. Keep everyone away and upwind. Set a cordon.",
+        "<strong>Do not break it, cut it, drive over it, sweep it, blow it, hose it or take samples.</strong> Do not put it in a skip bin or a truck.",
+        "Tell the Supervisor. He decides what to do: a licensed asbestos assessor or removalist is called. <strong>McKimm Civil does not remove asbestos.</strong> Asbestos waste goes only to a facility licensed to take it.",
+        "Spoil that may contain asbestos <strong>does not leave the site</strong> and is not mixed with clean material.",
+        "If you think you were exposed: move away, <strong>bag the clothes</strong> you were wearing, wash well, and tell the Supervisor. It is recorded on the Incident / Hazard Report."] }],
+      ["danger","Contaminated soil and buried waste",{ p:"Signs: strong or chemical <strong>odours</strong>, oily or coloured staining, a <strong>sheen on water</strong>, buried drums, tanks, ash, slag, rubbish, or fill that looks wrong.", l:[
+        "<strong>Stop.</strong> Keep people and plant away. Do not smell it or touch it. Keep it away from drains and waterways.",
+        "Tell the Supervisor. He decides on testing (a NATA-registered laboratory) and on classifying the waste under the <strong>NSW waste classification guidelines</strong> before any of it is moved off site or tipped. Do not take it to a landfill without that.",
+        "A pollution incident that causes or threatens material harm is reported to the EPA on <strong>131 555</strong> (the Supervisor decides; see the Incident SOP)."] }],
+      ["danger","Aboriginal objects, historic relics and human remains",{ l:[
+        "<strong>Aboriginal objects and places</strong> include stone artefacts, scarred trees, shell middens, grinding grooves and burials. It is an offence to harm them. <strong>Stop work in that area</strong>, keep people and plant off it, do not move or collect anything, take photos and tell the Supervisor. He reports it to Heritage NSW. Record it on the Heritage Investigation form.",
+        "<strong>Historic relics</strong> (old foundations, bottles, tools, structures): the same, stop and report.",
+        "<strong>Human remains or suspected bones:</strong> stop immediately, keep the area undisturbed, call the <strong>police (000)</strong> and the Supervisor. Do not touch or move them. Treat the place with respect."] }],
+      ["warning","Other unexpected finds",["<strong>Unmarked services, cables, tape or conduit:</strong> stop and follow the Services SOP.","<strong>Gas smell or a gas main:</strong> stop, move away, call 000 and the gas owner.","<strong>Unexploded or suspicious items:</strong> do not touch, move away, call 000.","<strong>Livestock, wildlife or protected plants:</strong> stop and ask the Supervisor."]],
+      ["info","Recording and restarting",["<strong>Take photos</strong> from a safe distance and note the location, time and what was found. Make a report on the Incident / Hazard Report in McKimm Field.","<strong>Work does not restart</strong> in the area until the Supervisor has cleared it (in writing, in McKimm Field or by message). Tell the principal or Council where the contract needs it."]]
+    ] });
+
+  /* ============================ 10. FITNESS FOR WORK ============================ */
+  reg({ id:"MCK-SOP-FIT-01", key:"fit", icon:"🧢", name:"Fitness for Work: Fatigue, Alcohol & Drugs, Medication, Heat and Cold", short:"fitness for work",
+    applies:"everyone who works for McKimm Civil or Snowy Skips, in the depot, on site and in the vehicles.",
+    ack:" I understand I must not work under the influence of alcohol or drugs, that I must tell the Supervisor if I am too tired, sick or on medication that could affect my safety, and that I can ask for help.",
+    checks:["Knows the alcohol and drug rule, including the morning after, and that nothing is brought to site or the depot",
+      "Knows to tell the Supervisor about medication that could cause drowsiness, before starting",
+      "Can name the signs of fatigue and knows what to do (stop, tell the Supervisor) and the rules for driving tired",
+      "Can name the signs of heat illness and of hypothermia and knows what to do",
+      "Knows the smoking rules (not near buildings, fuel, bitumen or dry grass)",
+      "Knows who to talk to and where to get help (Supervisor, Lifeline 13 11 14)"],
+    sections:[
+      ["info","Purpose","To make sure everyone is fit to work safely, and to look after each other. A worker who is impaired by alcohol, drugs, medication, fatigue, illness, heat or cold puts themselves and their mates at risk. Under the WHS Act, the business must manage these risks and workers must take reasonable care for their own safety and that of others."],
+      ["danger","Alcohol and drugs",{ l:[
+        "<strong>Nobody may work, drive or be on site or in the depot under the influence of alcohol or illegal drugs.</strong> That includes the morning after: if you were drinking heavily last night, tell the Supervisor before you start.",
+        "No alcohol or illegal drugs are brought to site, into vehicles or into the depot.",
+        "<strong>Medicines:</strong> some prescription and over-the-counter medicines cause drowsiness or slow reactions. Tell the Supervisor <strong>before you start</strong> if a medicine could affect your safety. Duties are adjusted. A medical certificate may be needed for you to return to full duties.",
+        "If the Supervisor reasonably thinks someone is not fit, he speaks to them privately and stands them down for the day. They are not allowed to drive or operate plant, and a safe way home is arranged. Testing by a trained person or approved provider may be required: after a serious incident, where there is reasonable suspicion, or where a principal contractor or road authority requires it.",
+        "<strong>Asking for help early is always better.</strong> If you or a mate is having trouble with alcohol or drugs, talk to the Supervisor in confidence, or call <strong>Lifeline 13 11 14</strong>."] }],
+      ["danger","Fatigue",{ l:[
+        "<strong>Signs:</strong> yawning, heavy eyes, slow reactions, poor concentration, drifting or microsleeps, getting irritable, losing track of what you were doing.",
+        "<strong>If you feel too tired to work safely, stop and tell the Supervisor.</strong> Nobody is in trouble for saying so.",
+        "Our working rule: plan for <strong>no more than 12 hours of work and driving in 24 hours</strong>, with at least <strong>10 hours off</strong> before the next shift, and regular breaks. Long days are planned and agreed, not allowed to build up.",
+        "<strong>Driving:</strong> take a break at least every 2 hours. If you feel sleepy, stop in a safe place and rest. Do not push on. Heavy vehicles over 12 t GVM also come under the Heavy Vehicle National Law fatigue rules (the Supervisor confirms for each truck).",
+        "The Supervisor keeps an eye on hours (timesheets), and rotates people off repetitive, noisy or monotonous jobs."] }],
+      ["warning","Heat",["Drink water often, before you are thirsty. Wear a hat, sunscreen, long light clothing and UV-rated glasses. Take breaks in the shade.","<strong>Signs of heat illness:</strong> headache, dizziness, cramps, nausea, heavy sweating then dry skin, confusion. <strong>Get the worker into the shade, cool them with water and fans, give water, and call 000 if they are confused or collapse.</strong> Check on each other.","On hot days start early, do the heavy work first, and stop when the Supervisor says so."]],
+      ["warning","Cold, frost and wet (Snowy region)",["Dress in layers, keep dry, wear gloves and a beanie. Have warm breaks and warm drinks. Wind and wet make it colder.","<strong>Signs of hypothermia:</strong> shivering, slurred speech, clumsiness, confusion. Get the person out of the cold, replace wet clothes, warm them gradually and call 000 if serious.","Frost and ice are a slip, slide and driving hazard. See the Winter Driving SOP."]],
+      ["info","Illness, injury and smoking",["If you are sick, especially with vomiting or diarrhoea or something infectious, stay home and tell the Supervisor. If you are injured, tell the Supervisor so duties can be adjusted.","<strong>Smoking and vaping</strong> only in the places the Supervisor allows: never within 4 m of a building or enclosed space, <strong>never near fuel, bitumen, chemicals, machinery or dry grass</strong>, and never when refuelling. Put butts out and take them with you."]],
+      ["info","Looking after each other","If you think a workmate is not fit to work, say so to the Supervisor. If you are worried about someone's wellbeing, ask them if they are OK. See the Psychosocial SOP for stress, workload and respect at work."]
+    ] });
+
+  /* ============================ 11. PSYCHOSOCIAL ============================ */
+  reg({ id:"MCK-SOP-PSYCH-01", key:"psych", icon:"🤝", name:"Psychosocial Hazards, Bullying, Harassment & Respect at Work", short:"respect at work and psychosocial hazards",
+    applies:"everyone who works for McKimm Civil or Snowy Skips, and anyone we deal with: customers, drivers, subcontractors and the public.",
+    ack:" I understand I must treat everyone with respect, that bullying, harassment and discrimination are not tolerated, and that I can raise a concern without being punished.",
+    checks:["Can say what bullying and harassment (including sexual harassment) are, and what is not bullying",
+      "Knows the behaviour we expect, including toward customers and workmates, and that it applies in the depot, vehicles, on site and online",
+      "Knows how to raise a concern with the Supervisor, and the other places to go if it is about the Supervisor",
+      "Knows nobody is punished for speaking up, and that concerns are kept confidential as far as possible",
+      "Knows what to do if a customer or member of the public is aggressive",
+      "Knows where to get support after a hard incident (Supervisor, Lifeline 13 11 14)"],
+    sections:[
+      ["info","Purpose","Under the WHS Regulation, we must manage <strong>psychosocial hazards</strong>: things in the way work is designed, managed and carried out that can cause psychological harm. That includes bullying, harassment and violence, and also stress from workload, isolation and fatigue. A respectful, safe workplace is part of our ISO 45001 system."],
+      ["warning","Examples of psychosocial hazards",["Very high or very low job demands, long hours, poor control over how and when work is done.","Poor support, unclear roles, being left on your own with hard tasks, working alone or in remote places.","<strong>Bullying, harassment, sexual harassment, discrimination</strong>, and a culture of putting people down.","<strong>Aggression or abuse</strong> from customers, drivers or the public (for example at a gate, a landfill or on the road).","Exposure to traumatic events, such as a serious injury or a death.","Poor change management and unfair treatment."]],
+      ["danger","What we do not accept",{ p:"<strong>Bullying</strong> is repeated, unreasonable behaviour directed at a worker (or a group) that creates a risk to health and safety, such as abuse, humiliation, threats, spreading rumours, deliberately excluding someone or setting them up to fail. <strong>Reasonable management action carried out in a reasonable way</strong> (for example giving feedback or directing work) is not bullying.", l:[
+        "<strong>Harassment and discrimination</strong> are unwelcome behaviour toward someone because of things like their sex, race, age, disability or religion. <strong>Sexual harassment</strong> is any unwelcome sexual advance, comment, joke, touching, image or message.",
+        "<strong>Pranks that put someone at risk</strong>, pressure to ignore safety, and mocking someone for stopping work or asking for help.",
+        "This applies in the depot, in vehicles, on every site, at work events and online (messages, social media, group chats)."] }],
+      ["info","How we treat each other",["Speak politely and directly. Give feedback privately and fairly. Look out for the new starter and the quiet one.","Listen when someone says they are not OK or that something went too far. Do not retaliate against anyone who raises a concern.","Say &ldquo;stop&rdquo; early if something bothers you. If you see it, speak up or tell the Supervisor."]],
+      ["danger","Raising a concern and what happens next",{ l:[
+        "<strong>Tell the Supervisor</strong> (Al, 0408 632 007), in person, by phone or message. If the concern is about the Supervisor, or you are not comfortable, you can go straight to <strong>SafeWork NSW 13 10 50</strong>, the <strong>Fair Work Commission</strong> (1300 799 675, for bullying), or <strong>Anti-Discrimination NSW</strong> (1800 670 812).",
+        "The Supervisor <strong>listens, takes it seriously, keeps it confidential</strong> as far as possible, writes it down, and acts quickly (usually within a few days) in a fair way that hears everyone's side.",
+        "<strong>Nobody will be punished or treated worse for raising a concern in good faith.</strong>",
+        "Serious or repeated behaviour has consequences, up to dismissal or ending a contract."] }],
+      ["warning","Aggressive customers and the public",["Stay calm, do not argue, and keep a safe distance. Do not stay if you feel unsafe: leave, and call the Supervisor.","Call <strong>000</strong> if someone is threatening or violent. Note what happened, take photos or dashcam where possible, and report it on the Incident / Hazard Report.","The Supervisor deals with the customer. A customer who abuses staff can be refused service."]],
+      ["info","Workload, isolation and after a hard day",["Tell the Supervisor if the work is too much, if you do not have the training or the help you need, or if you are working alone too often. The Supervisor checks in regularly and adjusts the work.","After a serious incident or a distressing event, the Supervisor checks in with everyone involved. Support is available, including <strong>Lifeline 13 11 14</strong> (24 hours) and <strong>Beyond Blue 1300 22 4636</strong>. Time off to recover is not a problem."]]
+    ] });
+
+  /* ============================ 12. BITUMEN ============================ */
+  reg({ id:"MCK-SOP-BIT-01", key:"bit", icon:"🛣️", name:"Bitumen Sealing: Hot Binder, Emulsion & Spray Work", short:"bitumen sealing",
+    applies:"everyone who loads, heats, sprays, sweeps, rolls or works near bitumen, bitumen emulsion, cutter or the sprayer truck.",
+    ack:" I understand bitumen causes severe burns, that I never put water on hot bitumen, and that I do not spray until the Supervisor has signed me off.",
+    comp:"Bitumen sprayer operation and sealing",
+    checks:["Knows which product is being sprayed and its temperature for the day from the data sheet and job paperwork",
+      "Wears the right PPE: heat-resistant gloves, long sleeves and trousers over boots, face shield and glasses, hard hat",
+      "Did the pre-start on the sprayer: tank, heater and flame failure, pump, hoses, couplings, spray bar and nozzles, extinguisher",
+      "Keeps everyone out of the spray path, works to the Traffic Guidance Scheme and has the drains protected",
+      "Knows the fire rules: no water on hot bitumen, dry chemical or foam extinguisher, evacuate and call 000",
+      "Can give first aid for a bitumen burn: cool under running water for 20 minutes, do not peel it off, get medical help"],
+    sections:[
+      ["info","Purpose","To seal roads and surfaces with bitumen safely. The hazards are <strong>serious burns, fire, fumes, traffic and spills</strong>. It covers the bitumen truck (Isuzu NPR 400 with the pump on the back), the spray bar and lance, hot binder and emulsion."],
+      ["danger","Know what you are spraying",{ l:[
+        "Our standard binder is <strong>Class 170 (C170) bitumen</strong>. It is a hot-applied binder. Its spraying temperature is set by the supplier's data sheet and is normally <strong>well above 100 °C</strong>, hot enough to cause deep burns on contact. <strong>Do not assume a temperature: read the data sheet and the job paperwork.</strong>",
+        "<strong>Bitumen emulsion</strong> (bitumen in water) is sprayed cooler, but it can still be warm and is an eye and skin irritant. <strong>Cutter</strong> (kerosene or similar) is flammable.",
+        "The Supervisor records the <strong>product, the batch and the spray temperature</strong> for the day on the job paperwork. Whatever the temperature, treat every product as a burn and fire hazard."] }],
+      ["danger","PPE",["<strong>Heat-resistant gloves</strong> (rated for hot bitumen), <strong>long-sleeved cotton or flame-retardant shirt and long trousers worn outside the boots</strong>, safety boots, hard hat, <strong>face shield over safety glasses</strong>, hi-vis.","No synthetic clothing that melts. No jewellery. Tie up long hair.","Dust mask for aggregate dust (see the Silica SOP)."]],
+      ["warning","Before you start",{ o:[
+        "<strong>Plan:</strong> weather (dry, not too windy, pavement dry and warm enough), the Traffic Guidance Scheme (see the Traffic SOP: we do not control traffic ourselves), drains to protect, neighbours, parked cars, and where overspray could go.",
+        "<strong>Pre-start the sprayer:</strong> tank, hatch and vents, thermometer, heater and flame-failure device, pump, hoses and couplings (rated for hot bitumen), valves, spray bar and nozzles, no leaks. Dry extinguisher (<strong>dry chemical powder or foam, never water</strong>), first aid kit, spill kit and plenty of clean water for cooling burns.",
+        "<strong>Protect drains, pits and gutters</strong> with covers or bunds before you start. Mask kerbs, signs and fixtures that must stay clean.",
+        "Brief the crew: roles, hand signals, who is the sprayer operator, the exclusion zone and the emergency plan."] }],
+      ["danger","Heating and filling",["<strong>Never put water into hot bitumen.</strong> Water turns to steam and makes it boil over violently. Make sure the tank, hoses and pump are dry.","Do not overheat. Do not exceed the temperature in the data sheet. Never leave a lit burner unattended. Keep ignition sources and fuel away.","Fill slowly and never overfill. Stand upwind, and <strong>do not stand over an open hatch</strong>. Fumes are harmful: avoid breathing them."]],
+      ["danger","Spraying",["<strong>Nobody stands in front of, beside or behind the spray bar.</strong> Keep everyone out of the spray path and the sprayer's exclusion zone, including workers on foot.","Test-spray in a safe area before the road, not onto the carriageway or a drain.","Spray only in suitable conditions. Stop if the wind carries the spray off the target or the surface is wet.","Use the hand lance only if signed off and only in a clear area. Do not point it at people. Shut off properly to stop drips.","Keep clear of the truck when it moves. Sweep, aggregate and rolling follow the plan and the speed signs. New seals are slippery and loose: keep the speed down and watch for stone throw."]],
+      ["danger","Fire, spills and burns",{ l:[
+        "<strong>Fire:</strong> never use water. Use dry chemical powder or foam, only if it is safe. Otherwise move everyone away, <strong>call 000</strong>, then call Al.",
+        "<strong>Spills:</strong> stop the flow, contain it with dry sand or earth, protect drains, scrape up and bag it. Do not wash it away. Report it.",
+        "<strong>Burns:</strong> cool the burn with <strong>running cool water for at least 20 minutes</strong>. <strong>Do not try to peel off or wipe off the bitumen</strong>; it is removed by medical staff. Remove jewellery near the burn. Cover with a clean, non-stick dressing and get medical help; call 000 for a large or deep burn or any burn to the face, eyes, hands or genitals.",
+        "A burn, fire or spill is reported on the Incident / Hazard Report. A serious burn is notifiable to SafeWork NSW (see the Incident SOP)."] }],
+      ["info","Clean-up",["Do not wash the truck, lance or tools where the runoff reaches drains or waterways (see the Erosion, Sediment and Washdown SOP). Clean tools as the Supervisor directs and dispose of cutter, rags and waste correctly.","Let the equipment cool before storing it, and the burner and the pump are shut down and the truck is parked on level ground."]]
+    ] });
+
+  /* ============================ 13. PRECAST ============================ */
+  reg({ id:"MCK-SOP-PRECAST-01", key:"precast", icon:"🧱", name:"Precast Concrete Block & Headwall Making, Stacking and Handling", short:"precast making, stacking and handling",
+    applies:"everyone who makes, strips, marks, moves, stacks, loads or delivers McKimm precast concrete blocks and headwalls.",
+    ack:" I understand precast units weigh a tonne or more, that I never lift or move them by hand, and that I keep clear of a unit that is being lifted or stacked.",
+    comp:"Precast block making, stacking and handling",
+    checks:["Knows each block and headwall is marked with its ID and casting date, and that nothing is moved before the Supervisor's minimum age",
+      "Handles wet concrete safely: gloves, long sleeves, eye protection, no kneeling; and keeps people clear of the concrete truck and hose",
+      "Strips and lifts only with the machine, at the lifting points on the Lift Plan, and keeps out of the lifting zone",
+      "Stacks on firm, level ground, no higher than the Supervisor allows, with the units seated flat and aligned",
+      "Quarantines a cracked or damaged unit and raises a non-conformance",
+      "Loads and restrains blocks for transport so they cannot move, and never rides on them"],
+    sections:[
+      ["info","Purpose and scope","McKimm Civil makes large precast concrete blocks (about 600 x 600 x 1200 mm, often over a tonne each) and headwalls. This SOP covers making them, marking them, stripping, lifting, stacking, loading and delivery, and the quality records. It supports ISO 9001 (the design and control of our own products) and ISO 45001."],
+      ["danger","Heavy: the main rules",{ l:[
+        "A block or headwall weighs <strong>a tonne or more</strong>. <strong>Never lift, push, tilt or steady one by hand.</strong> Use a machine with the correct gear (see the Pipe Laying and Lifting SOP and the Lift Plan).",
+        "<strong>Nobody stands under, beside or within reach of a unit that is being lifted, swung or placed.</strong> Keep out of the lifting zone. Do not stand between a unit and another unit, a wall or the machine.",
+        "Never lift a unit before it has <strong>reached the minimum age or strength</strong> the Supervisor has set for the mix. The casting date is marked on every unit."] }],
+      ["warning","Making them: formwork and concrete",["Check the moulds before each pour: clean, true, secure, release agent applied, any lifting anchors or inserts positioned as the drawing shows.","Wet concrete burns. Wear nitrile-lined gloves, long sleeves, trousers outside boots and eye protection (see the Chemicals SOP). Do not kneel in it.","<strong>Concrete trucks:</strong> keep everyone away from the reversing truck and the chute. Use a spotter. Do not stand between the truck and the mould. Keep a safe distance from a pump hose, which can whip.","Vibrators: use a residual current device (RCD) and a good lead. Wear hearing protection. Plan the pour to limit repetitive shovelling and heavy lifting (see the Manual Handling SOP).","Record the <strong>mix, plasticiser quantity, water added, slump if tested, casting date and number of units</strong> on the Daily Report. If the mix is changed, the Supervisor approves it first."]],
+      ["danger","Stripping and moving",{ o:[
+        "Check the unit has reached the age the Supervisor set. Set up the machine on firm, level ground and clear the area.",
+        "Strip the mould with bars and tools, not your hands. Watch for pinch points. Keep fingers and feet clear. Wear eye protection when hammering.",
+        "Lift only at the lifting points on the <strong>Lift Plan</strong>, with rated gear that has been inspected. Lift just clear first and check it. Keep the unit low and travel slowly.",
+        "<strong>Inspect each unit</strong> as it is lifted: cracks, chips, honeycombing, exposed reinforcement or a damaged anchor. Mark and set aside any unit that is damaged."] }],
+      ["warning","Stacking and storage",["Stack on <strong>firm, level, compacted ground</strong>, never on soft ground, a slope or a trench edge. Seat each unit flat and aligned on the one below. Use bearers.","<strong>Do not stack higher than the Supervisor allows</strong> (two high unless the Supervisor has approved more for a specific stack). Keep stacks a safe distance from walkways, fences and parked vehicles.","Keep people out of the stacking area while units are placed or removed. Nobody climbs on a stack."]],
+      ["warning","Loading, delivery and quality",["Load units on the truck or trailer at the lifting points, in the right order, with <strong>rated chains or straps and enough tie-down points</strong>. Never exceed the vehicle's limits (see the Trucks SOP). Nobody rides on the load.","<strong>Quality:</strong> each unit is marked with its ID and casting date so it can be traced. A cracked or damaged unit is <strong>quarantined</strong> (not delivered) and raised as a non-conformance (MCK-NCR). The Supervisor controls any change to the design, the reinforcement or the lifting points and records it.","Check the unit against the delivery docket or the job requirement before it leaves the depot."]],
+      ["info","Cutting and dust","Cutting, drilling or grinding concrete follows the Silica SOP: wet cutting, extraction and a respirator. Do not break or trim a unit to shape it without the Supervisor's approval."]
+    ] });
+
+  /* ============================ 14. EROSION / WASHDOWN ============================ */
+  reg({ id:"MCK-SOP-ESC-01", key:"esc", icon:"🌿", name:"Erosion, Sediment Control, Concrete Washout & Machinery Washdown", short:"erosion, sediment and washdown",
+    applies:"everyone working on sites that disturb ground or use concrete, water, plant or trucks, and moving plant between sites and properties.",
+    ack:" I understand I must keep soil, concrete washwater, fuel and weeds out of drains, creeks and neighbouring land.",
+    checks:["Knows the erosion and sediment controls go in before the ground is disturbed, and where the plan for the job is",
+      "Checks the controls every day and after rain, and tells the Supervisor if they are damaged or full",
+      "Keeps stockpiles away from drains and creeks and inside the controls, and stops muddy water leaving site",
+      "Uses the concrete washout bay and never washes concrete, slurry or fuel into a drain, gutter, creek or the ground",
+      "Cleans soil, seed and plant material off plant and vehicles before moving them between sites, in the washdown area",
+      "Knows the construction hours and the steps for dust, noise and neighbour complaints"],
+    sections:[
+      ["info","Purpose","To protect land, water and neighbours, and to stop weeds and plant diseases spreading. It supports ISO 14001. The standards behind it are the <em>Blue Book</em> (Managing Urban Stormwater: Soils and Construction) and our duty under the NSW <em>Biosecurity Act 2015</em> and the <em>Protection of the Environment Operations Act 1997</em>."],
+      ["danger","Before the ground is disturbed",["Read the <strong>erosion and sediment control plan</strong> for the job. Put the controls in <strong>before</strong> you strip or dig: sediment fence on the low side, catch drains and diversions, a stabilised entry and exit (a shaker or gravel) where trucks leave, inlet protection on nearby drains.","Keep <strong>stockpiles</strong> away from drains, creeks and the road edge, inside the controls, and covered or stabilised in wind or rain. Keep topsoil separate.","Minimise how much ground is open at one time. Re-vegetate or stabilise finished areas as soon as you can."]],
+      ["warning","Daily checks and after rain",["Check the fence, drains, entry and stockpiles <strong>every day, before forecast rain, and after rain</strong>. Fix damage the same day. Clean out sediment when a trap is about one-third full.","Do not pump or release muddy water to a drain or creek. Dewater through a filter or a settling area as the plan says.","If sediment leaves site, stop, contain it, tell the Supervisor and report it. A pollution incident that causes or threatens material harm is reported to the EPA on <strong>131 555</strong>."]],
+      ["danger","Concrete washout and washing plant",["Use a <strong>lined, signed concrete washout bay</strong> for concrete trucks, chutes, mixers and tools. <strong>Never wash concrete, slurry, cement or paint into a drain, gutter, creek or the ground.</strong> Let it dry, then dispose of it as the Supervisor directs.","<strong>Never wash plant, trucks, tools or sprayers</strong> where the runoff can reach a drain, creek or neighbour. Use the washdown area, with the water captured.","Fuel, oil, hydraulic leaks and spills: see the Fuel and Chemicals SOPs."]],
+      ["warning","Biosecurity: clean before you move",{ p:"Soil, weed seed and plant diseases (for example <em>Phytophthora</em>) can travel on machinery. Everyone has a general duty to prevent and minimise biosecurity risk.", l:[
+        "<strong>Clean plant, trucks, trailers, chippers and tools of soil, mud, seed and plant material</strong> before moving them from a site or property, and before they arrive on one. Do it in the designated washdown area.",
+        "Clean from the top down: cab, boom, bucket, tracks or tyres, guards, radiator and under-body. Check the tool boxes and the hitch. Check for the all-clear before you leave.",
+        "Take extra care when you go from a weedy or disease-affected area to a clean one, to farms, bushland and wet places.",
+        "Do not move weeds, or soil that may carry them, off the site. Dispose of weed material as the Supervisor directs."] }],
+      ["info","Dust, noise, neighbours and wildlife",["<strong>Dust:</strong> water down roads and stockpiles in dry or windy weather. Cover loads. Stop work if dust leaves the site.","<strong>Noise:</strong> unless the approval says otherwise, standard construction hours are <strong>Monday to Friday 7 am to 6 pm and Saturday 8 am to 1 pm, none on Sundays or public holidays</strong>. Keep noisy work inside the hours and tell neighbours if the work is unusual. Keep equipment maintained with silencers fitted.","<strong>Complaints:</strong> be polite, do not argue, take the person's name and the issue, and tell the Supervisor the same day.","<strong>Wildlife and trees:</strong> keep out of areas marked for protection. Check open trenches and pits for animals before work starts and at the end of the day. Do not remove vegetation outside the approved area."]]
+    ] });
+
+  /* ============================ 15. WORKSHOP ============================ */
+  reg({ id:"MCK-SOP-WKSHOP-01", key:"wkshop", icon:"🔧", name:"Workshop Safety: Hot Work, Grinders, Tyres, Jacks and Isolation", short:"workshop safety",
+    applies:"everyone who works in the depot workshop or does repairs, welding, grinding or tyre work anywhere.",
+    ack:" I understand I do not rely on a jack alone, that I isolate machines before working on them, and that safety repairs on plant and trucks are done by a qualified mechanic.",
+    comp:"Workshop hot work, grinding and tyre changing",
+    checks:["Wears the right PPE for the job: eye and face protection, hearing, gloves, boots, and no loose clothing",
+      "Isolates the machine before working on it: engine off, key out, battery isolator off, energy released, tagged",
+      "Supports a raised vehicle or machine on axle stands or blocks, never on a jack alone",
+      "Sets up hot work safely: area cleared of fuel and combustibles, extinguisher at hand, fire watch, and the right eye protection for welding",
+      "Knows the tyre rules: deflate fully, use a cage or restraint, never work on an inflated split-rim or leave it unattended",
+      "Knows what the crew may fix and that any safety defect (brakes, steering, hook-lift, hydraulics) is fixed by a qualified mechanic"],
+    sections:[
+      ["info","Purpose","To prevent injury and fire when we repair and maintain plant and trucks. It covers the depot workshop and any field repairs. See the Maintenance Record in McKimm Field: <strong>routine servicing</strong> may be done by competent crew, but <strong>any safety issue on plant or trucks must be done or signed off by a qualified mechanic</strong>, and heavy vehicle inspections are done by the HVIS inspector."],
+      ["danger","Isolate before you work",{ o:[
+        "Park on level ground, <strong>engine off, key out</strong>, park brake on, wheels chocked, attachments on the ground.",
+        "Turn the <strong>battery isolator OFF</strong>. Put a <strong>tag</strong> on the key or controls: &ldquo;Do not start: work in progress&rdquo;.",
+        "<strong>Release stored energy:</strong> hydraulic pressure, air, springs. Support raised booms or attachments with the lift brace or rated blocks. Never rely on hydraulics to hold anything up.",
+        "Only the person who tagged it removes the tag. Test that it is isolated before starting the work."] }],
+      ["danger","Jacks, stands and lifting",["<strong>Never work under anything held only by a jack.</strong> Use rated axle stands or blocks on firm level ground. Use the right jack for the weight and a lifting point the manufacturer allows.","Use the workshop hoist or a machine for heavy parts, with rated gear (see the Pipe Laying and Lifting SOP). Do not lift over people. Use a trolley or two people for heavy items (see the Manual Handling SOP)."]],
+      ["danger","Hot work: welding, cutting and grinding",["<strong>Clear the area</strong> of fuel, oil, rags, aerosols, gas cylinders and combustibles. Do not weld or cut on or near a fuel tank or drum unless it has been made safe.","Have a charged extinguisher (and a person on fire watch for 30 minutes afterwards for a bigger job). No hot work on a Total Fire Ban day outside the workshop.","Wear a welding helmet, gloves and fire-resistant clothing for welding, a face shield and eye protection for grinding, and hearing protection. Screen the arc so others are not exposed. Ventilate and avoid the fumes.","<strong>Grinders:</strong> guards on, the right disc for the job, check it for damage, hold it with both hands, and keep sparks away from fuel. Tools with a damaged lead or no RCD are not used."]],
+      ["danger","Tyres and wheels",["<strong>Deflate the tyre fully</strong> before removing a wheel or breaking a bead. Use a tyre cage or restraint when inflating, stand to the side, never over the tyre, and never inflate a tyre that has been run flat without it being checked.","Never work on or inflate a split or multi-piece rim unless you are trained. Use the right tools. Truck tyres are heavy: use a trolley or two people.","Check wheel nuts are torqued to specification and re-torque after the first drive."]],
+      ["warning","Compressed air, hydraulics and chemicals",["Do not use compressed air to clean skin or clothes. Eye protection when using it for cleaning, at a low pressure.","Hydraulic fluid can <strong>inject through the skin</strong>. Do not feel for a leak with your hands. If hurt, get medical help at once.","Follow the Chemicals SOP for oils, solvents, degreasers and brake cleaner. Dispose of oily waste in the right container.","Keep the workshop tidy. Keep walkways clear, leads off the floor, and spills cleaned up at once. Know where the extinguisher and first aid kit are."]],
+      ["info","What the crew can and cannot fix",["<strong>Competent crew may do:</strong> oil and filter changes, greasing, checks and other routine servicing within their skill, and record it.","<strong>A qualified mechanic must do or sign off:</strong> brakes, steering, suspension, hydraulics, the hook-lift, lifting equipment and structures, ROPS, electrical safety items and anything that affects safe operation. Heavy vehicle inspections are done by the HVIS inspector. The Supervisor decides when in doubt.","Report every fault and tag out any unsafe plant. Do not use it until it is fixed."]]
+    ] });
+
+  /* ============================ 16. SNOWY SKIPS WASTE ============================ */
+  reg({ id:"MCK-SOP-WASTE-01", key:"waste", icon:"♻️", skips:true, name:"Skip Bins: Waste Acceptance, Customer Sites & Depot (Snowy Skips)", short:"skip bin waste acceptance and customer sites",
+    applies:"everyone who delivers, collects, inspects, tips or stores skip bins and waste for Snowy Skips, and who deals with customers.",
+    ack:" I understand I do not lift a bin that holds prohibited or dangerous waste, I never climb into or onto a bin, and I report anything suspicious.",
+    comp:"Skip bin collection, inspection and tipping (Snowy Skips)",
+    checks:["Can list what must never go in a bin (asbestos, chemicals, gas bottles, batteries, liquids, medical and sharps) and where to find the customer pamphlet",
+      "Looks into a bin from the ground before lifting, checking for overfilling, height, hazardous or prohibited waste, and does not climb on or into it",
+      "Knows what to do if prohibited waste or suspected asbestos is found: do not lift, photo, tell the Supervisor",
+      "Places and collects bins safely at customer sites: ground, overhead lines, access, people, and photographs the bin",
+      "Follows the tip site rules, tips in the right area, and records the docket and weights in the Snowy Skips app",
+      "Knows what to do about a smoking or burning load and about an overweight bin"],
+    sections:[
+      ["info","Purpose","To keep our drivers, customers, the landfill and the environment safe, and to make sure only the right waste goes in a skip bin. It is read together with the <strong>Hook-lift Bin Lifter SWMS</strong>, the <strong>Unexpected Finds SOP</strong> and the customer <strong>information pamphlet</strong> (what can and cannot go in a bin, the hire period and the rates)."],
+      ["danger","Waste that must never go in a bin",["<strong>Asbestos</strong> and anything that may contain it (fibro, AC pipe, old sheeting and lagging).","<strong>Hazardous and liquid waste:</strong> chemicals, paint, solvents, fuel, oil, pesticides, acids, batteries (car and lithium), <strong>gas bottles and fire extinguishers</strong>, flares and ammunition.","<strong>Medical and clinical waste and sharps</strong>, animal carcasses, human waste.","Contaminated soil, and anything else the pamphlet or the Supervisor says is not accepted. Some items (tyres, mattresses, fridges and air conditioners, e-waste) need special handling or a fee: follow the pamphlet.","Wet, burning, smouldering or smoking waste."]],
+      ["danger","Before you lift a bin",{ o:[
+        "<strong>Look into the bin from the ground.</strong> <strong>Never climb on, into or over a bin or its load.</strong> Check the load is not above the top, is not overweight, and is not spilling.",
+        "Check for prohibited or hazardous waste, and for sharp or protruding items, pressure vessels and liquids. Check the doors, hooks and rails.",
+        "If you find prohibited waste: <strong>do not lift the bin.</strong> Keep clear, take photos, tell the Supervisor and the customer. The customer arranges removal, or the Supervisor decides what to do and any fee. If you suspect asbestos, follow the Unexpected Finds SOP.",
+        "If the bin is <strong>overweight</strong> for the truck, do not lift it. Ask the customer to remove material, or arrange a different way to move it."] }],
+      ["warning","At the customer's site",["Agree where the bin goes. Choose firm, level ground clear of overhead lines, trees, gutters, drains, septic tanks and parked cars. Check the access and protect driveways and pavers where you can.","Keep the customer, children and pets clear while you work. <strong>Do not enter the house or the yard beyond what is needed.</strong>","Take a photo of the bin after you place it and before you collect it. Leave the site tidy.","Be polite. If a customer is upset or aggressive, do not argue: finish safely, leave and call the Supervisor (see the Psychosocial SOP).","Bins on a public road, footpath or nature strip may need a Council permit; the office confirms this."]],
+      ["danger","At the tip and in transit",["Follow the landfill or transfer station's <strong>rules, signs and the staff's instructions</strong>. Use the weighbridge. Stay in your truck unless told otherwise. Tip only in the area you are directed to. Do not scavenge.","Secure and cover every load before it leaves the customer's site. Check the locks (see the Trucks SOP and the Bin Lifter SWMS).","<strong>Smoke or fire in a load:</strong> do not tip it onto other waste or near buildings. Move to a clear, open area away from people, call <strong>000</strong>, then call Al.","Record the <strong>docket, weight and destination</strong> in the Snowy Skips app. Tell the Supervisor if a load was rejected."]],
+      ["info","At the depot",["Keep bins stored on firm level ground, not stacked, with a clear gap between them. Check rails, doors and hook bars when a bin comes in, and tag out a damaged bin.","Keep customers at the office or gate. Visitors are met and escorted (see the Contractors and Visitors SOP). Keep walkways clear.","Keep oily waste, chemicals and batteries in their proper containers. Keep a spill kit and extinguisher handy. Report any incident, near miss or complaint on the Incident / Hazard Report."]]
+    ] });
+
+  /* ============================ 17. CONTRACTORS ============================ */
+  reg({ id:"MCK-SOP-CONTR-01", key:"contr", icon:"🪪", name:"Contractors, Subcontractors, Suppliers & Visitors", short:"contractors, suppliers and visitors",
+    applies:"everyone who engages, supervises, meets or works alongside a subcontractor, supplier, delivery driver or visitor, on site or at the depot.",
+    ack:" I understand subcontractors and visitors are checked, inducted and supervised before they start, and that I do not let anyone work or walk around unsupervised.",
+    checks:["Knows what to check before a subcontractor starts: licence, insurance, white card, tickets and their SWMS",
+      "Knows subcontractors are inducted and sign in, and that the Supervisor agrees the work area and the rules",
+      "Knows visitors are met at the gate, signed in, inducted, given PPE and escorted",
+      "Knows the rules for deliveries: where, when, who is in the area, and who checks the delivery against the docket",
+      "Knows to stop an unsafe contractor and tell the Supervisor",
+      "Knows incidents and near misses by contractors are reported the same way as ours"],
+    sections:[
+      ["info","Purpose","To make sure the businesses and people we bring onto our work are competent, insured, safe and supervised. We must consult, cooperate and coordinate with other businesses on a shared site, and ISO 9001 requires us to control suppliers and subcontractors."],
+      ["danger","Before a subcontractor starts",{ o:[
+        "Choose them from the <strong>approved supplier and subcontractor list</strong> where you can. Check the <strong>licence</strong> for the work, <strong>public liability insurance</strong> (certificate of currency) and <strong>workers compensation insurance</strong>.",
+        "Check their workers have a <strong>white card</strong> and any tickets or licences for the task (for example a high risk work licence), by sighting them.",
+        "Get their <strong>SWMS</strong> for any high-risk work and read it. If it conflicts with ours, the stricter rule applies. The Supervisor agrees the work area and how our work and theirs will fit together.",
+        "Give them an <strong>induction</strong> (emergency arrangements, hazards, rules, who the Supervisor is). They <strong>sign in</strong> each day and wear the right PPE."] }],
+      ["warning","While they work",["The Supervisor checks the work against the SWMS and the plan. We stop any unsafe work and tell the contractor's boss. A contractor's plant operator follows our exclusion zones and the Traffic SOP.","Incidents and near misses involving a contractor are reported on the Incident / Hazard Report. After the job, the Supervisor notes how they performed (quality, safety, time) so it feeds the approved list."]],
+      ["danger","Visitors",["Visitors, customers and drivers are met at the <strong>gate or the office</strong>. They <strong>sign in</strong>, get a short safety briefing, wear hi-vis and boots, and are <strong>escorted</strong> at all times.","They do not enter the plant, workshop, fuel store or work areas without the Supervisor's OK. Children and pets stay at the office or are not brought."]],
+      ["warning","Deliveries and suppliers",["Brief every delivery driver: where to go, the exclusion zones, overhead lines and the speed limit. A spotter guides reversing trucks, and nobody stands near an unloading or tipping truck.","Check each delivery against the <strong>order and the docket</strong> and look at the material or product (damage, size, class, quantity). Reject or quarantine anything wrong and record it as a non-conformance (MCK-NCR).","Get the product certificates or test results the job requires (for example pipes, aggregates and concrete)."]]
+    ] });
+
+  /* ============================ 18. WORKING ALONE ============================ */
+  reg({ id:"MCK-SOP-ALONE-01", key:"alone", icon:"📱", name:"Working Alone and Remote Work", short:"working alone and remote work",
+    applies:"anyone who works or drives alone, or too far from help to reach it quickly, including at the depot after hours.",
+    ack:" I understand which jobs I must never do alone, and that I must check in and tell the Supervisor where I am going.",
+    checks:["Can name the jobs that are never done alone (trench work, chainsaw, chipper, hot bitumen, lifting, near power lines, confined space, work at heights)",
+      "Tells the Supervisor where they are going, what they will do and when they expect to finish",
+      "Checks phone coverage and knows the backup if there is none",
+      "Knows the check-in times and what happens if one is missed",
+      "Has a stocked vehicle (water, food, first aid, charger, warm clothes) and a plan if it breaks down or bogs",
+      "Knows how to give a clear location to 000"],
+    sections:[
+      ["info","Purpose","Our area is large and rural, with poor mobile coverage in places. A worker who is hurt or stuck alone may not be found for hours. This SOP says which jobs are never done alone, and how we keep in touch. It adds to the working-alone rules in the SWMS."],
+      ["danger","Jobs that are never done alone",["<strong>Work in or beside a trench or excavation</strong> (a second person stays at the surface).","<strong>Chainsaw, chipper</strong>, road saw or other high-risk powered tools.","<strong>Hot bitumen</strong>, hot work, or work with fuel or chemicals that could cause a serious injury.","<strong>Lifting with an excavator or crane</strong>, work with slings, or work near suspended loads.","Work near <strong>power lines or underground services</strong>, in a <strong>confined space</strong>, or at <strong>heights</strong>.","Work on a live road, or with plant near other people.","If in doubt, do not do it alone. Wait for another person, or ask the Supervisor."]],
+      ["warning","Before you go",{ o:[
+        "Tell the Supervisor <strong>where you are going, what you will do and when you will be back</strong>. Log it in the message or in McKimm Field.",
+        "Check <strong>mobile coverage</strong> at the work front. If there is none, agree another way with the Supervisor (a UHF radio, a satellite messenger, or a second person).",
+        "Have a charged phone and a charger, water, food, a first aid kit, warm and rain clothes, a torch, hi-vis, fuel, and the right PPE. Check the vehicle and its spare."] }],
+      ["warning","Check-ins",{ l:["Check in with the Supervisor <strong>when you start, at the agreed times (at least every 2 hours) and when you finish</strong>. A text is fine.","<strong>If a check-in is missed</strong>, the Supervisor calls you, then tries the other crew, then goes to the site. After a reasonable delay with no contact he calls <strong>000</strong> and gives the last known location.","If your plans change, tell the Supervisor."] }],
+      ["info","If something goes wrong",["Call <strong>000</strong> (or 112 if there is no coverage on your network) and give the location: the property or road name, the nearest cross street or landmark, GPS if you have it. Stay on the line.","Stay with the vehicle if you are lost, bogged or broken down. Make yourself visible. Share your location from your phone if you can.","<strong>Never go on alone after dark in bad weather</strong>, and respect the winter rules (see the Winter Driving SOP).","After hours at the depot: lock up, tell the Supervisor you are there, and do not do high-risk work."]]
+    ] });
+
+  /* ============================ 19. WINTER ============================ */
+  reg({ id:"MCK-SOP-WINTER-01", key:"winter", icon:"❄️", name:"Winter Driving, Snow, Ice & Frost", short:"winter driving, snow and ice",
+    applies:"everyone who drives or works outdoors in the Snowy Mountains and Monaro in cold weather, from autumn to spring.",
+    ack:" I understand I must slow down for frost, ice, fog and snow, carry chains where needed, and stop work if it is not safe.",
+    checks:["Checks the forecast and the road conditions before driving and before starting work, and knows where to find them",
+      "Knows how to drive on ice, frost, fog and snow: slow, smooth, long gaps, headlights on",
+      "Has chains for the vehicle, knows when to carry them and has practised fitting them",
+      "Knows the vehicle checks for cold weather: tyres, wipers, lights, battery, fuel, air brakes and the winter diesel",
+      "Knows what to do on frosty ground and surfaces: slippery batters, ramps, steps and trays; and to stop work if it is unsafe",
+      "Has the cold weather kit in the vehicle and knows what to do if stuck or stranded"],
+    sections:[
+      ["info","Purpose","Winter in the Snowy region means frost, black ice, fog, snow, short days and kangaroos at dusk. Each year people are hurt by sliding vehicles, frozen walkways and cold stress. This SOP adds to the Fitness for Work SOP and the Trucks SOP."],
+      ["danger","Before you drive or start work",["<strong>Check the forecast</strong> and the road conditions: Live Traffic NSW (132 701 or the website) and, for national park roads, NPWS alerts. If conditions are bad, delay, change the route or stop work and ask the Supervisor.","Do not start with frosted windows. Scrape or use de-icer. <strong>Never pour boiling water on glass.</strong> Clear lights, mirrors and number plates, and snow off the roof and tray.","Check tyres (tread and pressure), wipers and washers with screen wash, lights, battery and fuel (keep the tank over half). Use <strong>winter-grade diesel or an additive</strong> so it does not gel. Drain the air tanks on air-brake trucks where the manual says."]],
+      ["danger","Driving in frost, ice, fog and snow",["<strong>Slow down.</strong> Leave a long gap (about double or more). Brake, steer and accelerate gently. Use a higher gear and engine braking on hills.","Shaded corners, bridges and cuttings freeze first, and <strong>black ice</strong> can be invisible. Be most careful early and late in the day.","Headlights on in fog, snow and rain. Slow right down in fog and keep to the left.","Watch for <strong>wildlife at dawn and dusk</strong>. Do not swerve hard to miss an animal.","<strong>Snow chains:</strong> carry chains, and know how to fit them, when going to snow areas, including Kosciuszko National Park roads, in the snow season. Practice fitting them in the depot first. Take them off when the road is clear."]],
+      ["warning","Plant, trucks and the work site",["<strong>Frost and ice make batters, ramps, tracks, steps and truck trays slippery.</strong> Do not work on frozen batters or ramps. Wait for them to thaw, or sand or salt them. Use three points of contact and boots with grip. De-ice steps and trays before climbing.","Let plant and hydraulics warm up before working. Do not run engines inside a closed shed (carbon monoxide).","Do not pour or place concrete or lay bitumen in frost or freezing conditions without the Supervisor's approval.","Short days: use lights and hi-vis, and plan to finish in daylight. Stop work in heavy snow, ice or poor visibility."]],
+      ["warning","Cold weather kit and if you get stuck",["Keep in each vehicle: a warm blanket, extra warm clothes, gloves and beanie, torch, water and food, a phone charger, first aid kit, hi-vis, warning triangles, a shovel and the chains.","If you are stuck or stranded: <strong>stay with the vehicle</strong>, keep warm, tell the Supervisor where you are, call 000 if in danger. Do not run the engine in a blocked exhaust (snow) with the windows shut.","See the Fitness for Work SOP for the signs and treatment of <strong>hypothermia</strong>, and the Working Alone SOP for check-ins."]]
+    ] });
+
+  /* ============================ 20. HEIGHTS ============================ */
+  reg({ id:"MCK-SOP-HEIGHTS-01", key:"heights", icon:"🪜", name:"Ladders and Working at Heights", short:"ladders and working at heights",
+    applies:"everyone who uses a ladder or step ladder, climbs onto a truck, tray, trailer, bin or machine, or works where a fall is possible, including near trench and excavation edges.",
+    ack:" I understand I use a ladder only for short, light jobs, keep three points of contact, and ask the Supervisor before any work where I could fall from a height.",
+    comp:"Ladders and working at heights",
+    checks:["Checks the ladder before use (rating, condition, feet, spreaders or locks) and has set it at the right angle and tied or footed it",
+      "Keeps three points of contact, faces the ladder, does not overreach, and does not stand on the top steps",
+      "Climbs on and off trucks, trays, trailers and machines the right way with three points of contact and does not jump down",
+      "Does not climb on bins or loads, or stand on the edge of a tray, and uses a tarp frame, winch or platform",
+      "Knows we do not do roof work, erect scaffolds or use harnesses, and asks the Supervisor before any work where a fall of 2 m or more is possible",
+      "Knows to keep clear of trench and excavation edges, and what edge protection is"],
+    sections:[
+      ["info","Purpose","A fall from even a short height can kill or injure for life. This SOP sets the rules for ladders, climbing on vehicles and plant, and any work where someone could fall. It adds to the Manual Handling and Excavation SOPs."],
+      ["danger","The rules for working at heights",{ l:[
+        "<strong>Do not work at height if there is another way.</strong> Do the work on the ground, or use a machine (for example an excavator or a loader) or a work platform.",
+        "<strong>Ask the Supervisor before any work where a person could fall 2 m or more</strong>, or into an excavation, pit or opening. He makes a plan first: do it from the ground, then edge protection or a platform, then fall-arrest as the last resort.",
+        "<strong>We do not do roof work, erect scaffolds, or work from elevated work platforms or harnesses</strong> unless the person is trained and licensed or competent and the Supervisor has approved it. A scaffold over 4 m high needs a licensed scaffolder, and an EWP needs training. Call a contractor."] }],
+      ["warning","Ladders and step ladders",{ o:[
+        "A ladder is for <strong>short jobs, light work and access</strong>, not a work platform for heavy or long jobs. Use only an <strong>industrial-rated</strong> ladder in good condition that meets AS/NZS 1892, rated for you and your load.",
+        "<strong>Check it before use:</strong> rails, rungs, feet, spreaders and locks, labels legible. Do not use a damaged ladder. Tag it out. <strong>Never use a metal ladder near electrics or power lines.</strong>",
+        "Set it on firm, level ground at about <strong>1 in 4</strong> (1 m out for every 4 m up). Extend a straight ladder <strong>1 m above the landing</strong> and tie it off at the top or have someone foot it. Fully open and lock a step ladder.",
+        "<strong>Face the ladder and keep three points of contact.</strong> Do not carry anything that stops you holding on. Use a tool belt or a rope. Do not overreach: keep your belt buckle inside the rails. Move the ladder instead.",
+        "<strong>Never stand on the top two steps of a step ladder.</strong> One person at a time. Barricade the area if people may walk under it."] }],
+      ["danger","Trucks, trays, trailers, bins and machines",["Use the steps, rungs and handholds fitted to the machine or truck. <strong>Face it and keep three points of contact.</strong> Do not carry things in your hands. Do not jump down. Keep steps clean and clear of mud, oil and frost.","<strong>Do not climb on a bin, a load, a stack of blocks, or the tray or headboard of a truck.</strong> Use the tarp frame or winch for covers. Do not stand on a tray edge or a rail.","Do not stand on a raised bucket or forks, or on any load. Do not ride on a load or a machine. Lift people only in a platform designed for it."]],
+      ["danger","Edges, pits and openings",["Keep out of the <strong>zone of influence</strong> at trench and excavation edges (see the Excavation SOP). Barricade open pits and holes, and cover or guard openings.","Use rated edge protection or a barrier where someone could fall. Do not remove a guard or a cover without replacing it. Wear a harness only if trained, with a rescue plan in place."]],
+      ["info","Falling objects","Where objects could fall on people below, keep people out of the area or put up a barrier. Do not throw items up or down. Secure tools and materials."]
+    ] });
+
+  /* ============================ 21. CONFINED SPACES ============================ */
+  reg({ id:"MCK-SOP-CONFINED-01", key:"confined", icon:"🕳️", name:"Confined Spaces: Do Not Enter", short:"confined spaces",
+    applies:"everyone who works with pits, manholes, sumps, tanks, silos, culverts and pipes, including the tanks on our own trucks.",
+    ack:" I understand I do not enter a confined space, and that I never go in after someone who has collapsed in one. I call 000 and the Supervisor.",
+    checks:["Can describe a confined space and name examples we work with: pits, manholes, sumps, tanks (including the bitumen and fuel tanks on our trucks), culverts and pipes",
+      "Knows the rule: do not enter, put your head in, or lean into one without the Supervisor's written permit and a trained person",
+      "Knows the dangers that are invisible: low oxygen, toxic or flammable gas, and engulfment",
+      "Knows never to go in after someone: call 000 and the Supervisor, and do not become a second victim",
+      "Knows the signs and barriers to put up, and that engines must not run near an open pit",
+      "Knows to call a trained contractor if entry is truly needed"],
+    sections:[
+      ["info","Purpose","More workers are killed trying to rescue someone from a confined space than the first person who collapsed. McKimm Civil is not set up or trained to enter confined spaces. The rule is simple: <strong>do not enter</strong>."],
+      ["danger","What a confined space is",{ p:"A <strong>confined space</strong> is a space that is enclosed or partly enclosed, is not designed to be lived in, and may have a dangerous atmosphere (too little oxygen, toxic or flammable gas or fumes) or risk of being trapped or engulfed. Examples we meet:", l:[
+        "<strong>Pits, manholes, sumps, stormwater and sewer structures, tanks and water tanks.</strong>",
+        "<strong>The tanks on our trucks:</strong> the bitumen tank, fuel and water tanks, and the hook-lift or tipper void spaces.",
+        "<strong>Long or deep culverts and pipes</strong>, silos and hoppers, and some deep trenches and excavations where gas can collect."] }],
+      ["danger","The rule",{ l:[
+        "<strong>Nobody enters, or puts their head or body into, a confined space</strong> on a McKimm Civil or Snowy Skips job, including to retrieve a dropped tool.",
+        "If entry is truly needed, <strong>stop and tell the Supervisor</strong>. A <strong>trained and equipped contractor</strong> does it, with a <strong>permit</strong>, atmosphere testing, isolation of hazards, ventilation, a standby person, communications and a rescue plan. The people entering hold training such as RIIWHS202E (Enter and work in confined spaces).",
+        "<strong>A short, new culvert pipe that is open at both ends and has good airflow</strong> may be treated as a normal work area only if the Supervisor has checked that nothing can fill it with fumes (petrol or diesel engines, bitumen, cutting or grinding), that nobody will work in it while plant is working near it, and that there is no water, collapse or trapping risk. If in doubt, treat it as a confined space."] }],
+      ["danger","If someone collapses or does not answer",{ o:[
+        "<strong>Do not go in after them.</strong> You can be overcome in seconds.",
+        "Call <strong>000</strong> and tell them it is a confined space. Then call the Supervisor.",
+        "Keep everyone away. Stop any engine or equipment near the opening. Keep the opening clear for the emergency crews.",
+        "Only trained rescuers with breathing apparatus enter. Never rely on holding your breath or a dust mask."] }],
+      ["warning","Keep it safe",["Put up <strong>barriers and a &ldquo;Danger — Confined space — Do not enter&rdquo; sign</strong> at open pits and manholes. Cover openings when not in use.","Do not run an engine, generator or pump near an open pit or enclosed space (carbon monoxide builds up).","Truck tanks: do not enter, clean or weld a tank. Cleaning, repairs and inspection are arranged through the Supervisor with a qualified contractor (see the Workshop SOP and the Bitumen SOP)."]]
+    ] });
+
+})();

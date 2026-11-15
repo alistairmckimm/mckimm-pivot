@@ -331,6 +331,7 @@
     DOCS.push({ tid, title:label, code:tid, owner:"Alistair McKimm", review: sop ? REVIEW_SOP : "", practical:false, kind: /SWMS/.test(tid) ? "SWMS" : "SOP" });
   });
   const PEOPLE = ["Alistair McKimm"].concat((window.MCK_PROJ && MCK_PROJ.CREW) || ["Simon Story","William Westaway"]);
+  window.MCK_TRAIN = { DOCS, TOPICS, training, COMP_TASKS, PEOPLE, YN };
 
   /* ---------- Look-ups against the saved forms ---------- */
   const forms = () => STATE.forms || [];
