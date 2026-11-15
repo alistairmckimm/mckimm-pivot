@@ -19,6 +19,7 @@
   const ol = a => "<ol>" + a.map(x => "<li>" + x + "</li>").join("") + "</ol>";
   function body(c){
     if (Array.isArray(c)) return ul(c);
+    if (c && typeof c === "object" && c.h) return c.h;
     if (c && typeof c === "object") return (c.p ? "<p>" + c.p + "</p>" : "") + (c.l ? ul(c.l) : "") + (c.o ? ol(c.o) : "") + (c.a ? "<p>" + c.a + "</p>" : "");
     return "<p>" + c + "</p>";
   }
@@ -718,6 +719,381 @@
         "Keep everyone away. Stop any engine or equipment near the opening. Keep the opening clear for the emergency crews.",
         "Only trained rescuers with breathing apparatus enter. Never rely on holding your breath or a dust mask."] }],
       ["warning","Keep it safe",["Put up <strong>barriers and a &ldquo;Danger — Confined space — Do not enter&rdquo; sign</strong> at open pits and manholes. Cover openings when not in use.","Do not run an engine, generator or pump near an open pit or enclosed space (carbon monoxide builds up).","Truck tanks: do not enter, clean or weld a tank. Cleaning, repairs and inspection are arranged through the Supervisor with a qualified contractor (see the Workshop SOP and the Bitumen SOP)."]]
+    ] });
+
+
+  /* ============================ 22. SKIP LOADER (chain bin lifter) v1.0, 16 Nov 2026 ============================ */
+  const SKIP_FIG1 = '<svg viewBox="0 0 720 330" role="img" aria-label="Side view of the skip loader with 4 lifting chains and 2 tipping chains" style="width:100%;max-width:720px;height:auto;display:block;margin:6px 0;background:#fff;border:1px solid #e2e8f0;border-radius:8px" xmlns="http://www.w3.org/2000/svg" font-family="Arial,Helvetica,sans-serif" font-size="13">'
+    + '<line x1="20" y1="268" x2="700" y2="268" stroke="#94a3b8" stroke-width="2"/>'
+    // truck
+    + '<rect x="40" y="170" width="95" height="78" rx="8" fill="#e2e8f0" stroke="#334155" stroke-width="2"/><rect x="58" y="182" width="55" height="30" rx="4" fill="#bfdbfe" stroke="#334155"/>'
+    + '<rect x="135" y="218" width="300" height="22" fill="#cbd5e1" stroke="#334155" stroke-width="2"/>'
+    + '<circle cx="95" cy="252" r="17" fill="#334155"/><circle cx="330" cy="252" r="17" fill="#334155"/><circle cx="375" cy="252" r="17" fill="#334155"/>'
+    // stabiliser
+    + '<rect x="425" y="240" width="9" height="24" fill="#f59e0b" stroke="#334155"/><rect x="415" y="263" width="29" height="6" fill="#f59e0b" stroke="#334155"/>'
+    + '<text x="452" y="292" fill="#334155">Stabiliser leg down on a pad</text>'
+    // arms pivot and arm
+    + '<circle cx="250" cy="212" r="7" fill="#334155"/><line x1="250" y1="212" x2="520" y2="70" stroke="#2563eb" stroke-width="10" stroke-linecap="round"/>'
+    + '<line x1="300" y1="216" x2="400" y2="140" stroke="#64748b" stroke-width="7" stroke-linecap="round"/>'
+    + '<text x="315" y="105" fill="#1d4ed8" font-weight="bold">Lifting arms</text><text x="408" y="150" fill="#475569">Arm ram</text>'
+    // skip
+    + '<polygon points="470,178 640,178 620,262 490,262" fill="#fde68a" stroke="#334155" stroke-width="2"/>'
+    + '<text x="525" y="226" fill="#334155" font-weight="bold">Skip bin</text>'
+    // lugs
+    + '<circle cx="478" cy="190" r="6" fill="#dc2626"/><circle cx="632" cy="190" r="6" fill="#dc2626"/>'
+    + '<circle cx="632" cy="190" r="10" fill="none" stroke="#16a34a" stroke-width="3"/>'
+    // lifting chains
+    + '<line x1="520" y1="72" x2="478" y2="186" stroke="#dc2626" stroke-width="3" stroke-dasharray="6 3"/><line x1="520" y1="72" x2="632" y2="186" stroke="#dc2626" stroke-width="3" stroke-dasharray="6 3"/>'
+    + '<text x="705" y="100" text-anchor="end" fill="#dc2626" font-weight="bold">4 lifting chains</text><text x="705" y="116" text-anchor="end" fill="#dc2626">2 each side, to the</text><text x="705" y="132" text-anchor="end" fill="#dc2626">side lifting lugs</text>'
+    // tipping chain
+    + '<line x1="438" y1="232" x2="626" y2="193" stroke="#16a34a" stroke-width="3" stroke-dasharray="6 3"/>'
+    + '<text x="250" y="300" fill="#15803d" font-weight="bold">2 tipping chains (one each side)</text><text x="250" y="316" fill="#15803d">truck tipping point to the rearmost lug (furthest from the truck)</text>'
+    + '<line x1="380" y1="296" x2="520" y2="212" stroke="#15803d" stroke-width="1"/>'
+    // controls
+    + '<rect x="190" y="242" width="22" height="14" fill="#f97316" stroke="#334155"/><text x="150" y="318" fill="#c2410c">Side controls</text><line x1="185" y1="306" x2="200" y2="258" stroke="#c2410c"/>'
+    + '<text x="30" y="30" fill="#0f172a" font-weight="bold" font-size="15">Skip loader: the parts and the chains</text>'
+    + '<text x="30" y="48" fill="#475569" font-size="12">Diagram only. Lug positions vary by skip. Your own truck may differ: check the operator&#8217;s manual.</text>'
+    + '</svg>';
+  const SKIP_FIG2 = '<svg viewBox="0 0 720 300" role="img" aria-label="Plan view of crush zones and exclusion zone around the skip loader" style="width:100%;max-width:720px;height:auto;display:block;margin:6px 0;background:#fff;border:1px solid #e2e8f0;border-radius:8px" xmlns="http://www.w3.org/2000/svg" font-family="Arial,Helvetica,sans-serif" font-size="13">'
+    + '<rect x="70" y="40" width="590" height="230" rx="18" fill="#fef2f2" stroke="#dc2626" stroke-width="2" stroke-dasharray="8 5"/>'
+    + '<text x="84" y="62" fill="#b91c1c" font-weight="bold">Exclusion zone: customers, kids, pets and other workers stay outside</text>'
+    + '<rect x="130" y="120" width="70" height="70" rx="6" fill="#e2e8f0" stroke="#334155" stroke-width="2"/><text x="140" y="160" fill="#334155">Cab</text>'
+    + '<rect x="200" y="125" width="230" height="60" fill="#cbd5e1" stroke="#334155" stroke-width="2"/><text x="270" y="160" fill="#334155">Truck body</text>'
+    + '<rect x="430" y="95" width="70" height="110" fill="#fecaca" stroke="#dc2626" stroke-width="2"/><text x="437" y="145" fill="#b91c1c" font-weight="bold">CRUSH</text><text x="440" y="162" fill="#b91c1c" font-weight="bold">ZONE</text>'
+    + '<rect x="500" y="110" width="110" height="80" fill="#fde68a" stroke="#334155" stroke-width="2"/><text x="530" y="155" fill="#334155" font-weight="bold">Skip</text>'
+    + '<rect x="610" y="95" width="40" height="110" fill="#fecaca" stroke="#dc2626" stroke-width="1"/><text x="650" y="228" text-anchor="end" fill="#b91c1c">Keep clear behind and beside a moving skip</text>'
+    + '<circle cx="300" cy="205" r="12" fill="#f97316" stroke="#334155"/><text x="110" y="236" fill="#c2410c" font-weight="bold">Operator at the side controls,</text><text x="110" y="252" fill="#c2410c">able to see the chains, the skip and behind the truck</text>'
+    + '<text x="20" y="25" fill="#0f172a" font-weight="bold" font-size="15">Where nobody stands while the arms or remote are live</text>'
+    + '</svg>';
+
+  reg({ id:"MCK-SOP-SKIPLOADER-01", key:"skiploader", icon:"⛓️", name:"Skip Loader Chain Bin Lifter (West-Trans DS 60S), Snowy Skips", short:"skip loader (chain bin lifter)", skips:true,
+    applies:"anyone who operates, rigs the chains on, services or works near the chain skip loader (bin lifter) on the Isuzu FRR 550, for Snowy Skips and McKimm Civil.",
+    ack:" I understand I never stand in the crush zone or under a raised skip, that I check every chain hook is fully on its lug before lifting or tipping, and that I do not operate the skip loader until the Supervisor has signed me off.",
+    comp:"Isuzu FRR 550 hook lift with Merrill bin lifter (Snowy Skips)",
+    checks:["Names the parts: lifting arms, arm rams, stabilisers, 4 lifting chains, 2 tipping chains, safety latches, side controls, remote and its stop button",
+      "Does the daily pre-start: chains and hooks (stretch, cracks, twists, gouges, latches), tags, arms, rams, hoses, stabilisers, controls, remote, lights and alarm",
+      "Checks the skip before lifting: all four lugs, no lip or edge beside the rearmost lugs, doors, rust, overloaded or overfilled",
+      "Parks on firm level ground, handbrake on, chocks if needed, stabilisers down on pads, exclusion zone set, looks up for power lines",
+      "Rigs the 4 lifting chains to the side lugs evenly and untwisted, checks every hook is fully on and latched, then steps out of the crush zone",
+      "Does a test lift a few centimetres off the ground and watches for overload signs before lifting fully",
+      "Loads, secures and covers the skip from the ground; arms and stabilisers in travel position before driving",
+      "Rigs the 2 tipping chains to the rearmost lugs (the end furthest from the truck), checks each hook is fully seated and latched, not caught on a lip or edge, clears the area and tips slowly",
+      "Places a skip gently on firm ground (boards under it on driveways or pavers), unhooks only once it is fully down",
+      "Uses the remote correctly: stop button tested, switched off and kept on them before entering the crush zone",
+      "Knows what to do if the truck goes light, a chain or hook fails, a skip jams part-tipped, or a power line is touched"],
+    sections:[
+      ["info","Purpose and the machine",{ p:"This SOP covers our <strong>chain skip loader</strong> (bin lifter) on the Isuzu FRR 550. It picks up a skip with <strong>four lifting chains</strong> hooked to the skip&rsquo;s side lifting lugs, and tips it with <strong>two tipping chains</strong> hooked to the skip&rsquo;s <strong>rearmost lugs</strong> (the end furthest from the truck) while the arms swing back. Dropped skips, false hook engagement, truck rollaway and people caught in the crush zone have all killed or badly injured skip drivers.", a:"<strong>Our lifter: West-Trans Equipment DS 60S skip loader, serial 10149</strong>, built June 2006 by West-Trans Equipment, Mulgrave NSW, fitted to our Isuzu FRR (VIN JALFRR33LY7000309, rego NLJ 005). <strong>Rated capacity on the plate: 6 tonnes, and never more than the truck&rsquo;s GVM.</strong> Use the plate figure, not the brochure. Never lift more than 6 t or more than the skip&rsquo;s own rating, whichever is lower. From West-Trans: suits 4&ndash;6 m&sup3; skips; 4.2 m deck; hydraulics 170 bar (2,500 psi); loads in about 42 seconds and unloads in about 52 seconds. Keep the West-Trans operator manual with the truck (West-Trans 1300 877 411). Where the manual is stricter than this SOP, the manual wins." }],
+      ["info","Know the parts", { h: SKIP_FIG1 + "<ul><li><strong>Lifting arms and arm rams:</strong> swing the skip on and off the truck and tip it.</li><li><strong>Stabiliser legs:</strong> take the load at the rear of the truck while lifting and tipping.</li><li><strong>4 lifting chains</strong> (two each side) with hooks and spring safety latches: go to the skip&rsquo;s side lifting lugs. Chain shorteners keep the skip level.</li><li><strong>2 tipping chains</strong>: go from the truck&rsquo;s tipping points to the skip&rsquo;s <strong>rearmost lugs</strong>, the end furthest from the truck (the same lugs the rear lifting chains use).</li><li><strong>Side controls</strong> and the <strong>remote</strong> (if fitted), each with a stop.</li></ul>" }],
+      ["info","Our truck and lifter (photos)", { h: "<div style=\"display:flex;flex-wrap:wrap;gap:10px;margin:8px 0\"><figure style=\"margin:0;flex:1 1 200px;max-width:260px\"><img src=\"skiploader-truck.jpg\" alt=\"Our Isuzu FRR (NLJ 005) with the DS 60S and a skip loaded for travel: arms back, chains hooked on.\" loading=\"lazy\" style=\"width:100%;border-radius:8px;border:1px solid #e2e8f0\"><figcaption style=\"font-size:12px;margin-top:3px\">Our Isuzu FRR (NLJ 005) with the DS 60S and a skip loaded for travel: arms back, chains hooked on.</figcaption></figure><figure style=\"margin:0;flex:1 1 200px;max-width:260px\"><img src=\"skiploader-arms.jpg\" alt=\"Near side: lifting arm, arm ram, and the lifting chain hooked to the skip&rsquo;s lug (yellow hook with latch).\" loading=\"lazy\" style=\"width:100%;border-radius:8px;border:1px solid #e2e8f0\"><figcaption style=\"font-size:12px;margin-top:3px\">Near side: lifting arm, arm ram, and the lifting chain hooked to the skip&rsquo;s lug (yellow hook with latch).</figcaption></figure><figure style=\"margin:0;flex:1 1 200px;max-width:260px\"><img src=\"skiploader-rear.jpg\" alt=\"Rear: the top bar between the arms, chains to the lugs, and the stabiliser feet under the back corners.\" loading=\"lazy\" style=\"width:100%;border-radius:8px;border:1px solid #e2e8f0\"><figcaption style=\"font-size:12px;margin-top:3px\">Rear: the top bar between the arms, chains to the lugs, and the stabiliser feet under the back corners.</figcaption></figure><figure style=\"margin:0;flex:1 1 200px;max-width:260px\"><img src=\"skiploader-plate.jpg\" alt=\"The plate: DS 60 S, serial 10149, 06-06, rated capacity 6 TON, not to exceed the vehicle&rsquo;s GVM.\" loading=\"lazy\" style=\"width:100%;border-radius:8px;border:1px solid #e2e8f0\"><figcaption style=\"font-size:12px;margin-top:3px\">The plate: DS 60 S, serial 10149, 06-06, rated capacity 6 TON, not to exceed the vehicle&rsquo;s GVM.</figcaption></figure></div>" }],
+      ["danger","When you must sign, and who may operate",{ l:[
+        "You do not have to sign this SOP straight away. <strong>Read and sign it, and be signed off by the Supervisor in a practical, before you first operate the skip loader or rig its chains.</strong> Sign again when the SOP is revised, or after 12 months without using it.",
+        "Only a driver with the <strong>right NSW licence class for the truck&rsquo;s GVM</strong> who has been signed off on the <strong>Competency Sign-off</strong> form operates it. A trainee works only with a signed-off operator beside them.",
+        "One person only works the controls at a time. Nobody else rigs or unhooks chains while the controls are live.",
+        "Read together with the SWMS for the hook-lift bin lifter (MCK-SWMS-BinLift), the Skip Bins SOP (waste acceptance), Work Near Electric Lines and Manual Handling."] }],
+      ["warning","PPE",["Hi-vis, safety boots, <strong>rigger&rsquo;s gloves</strong> for handling chains, eye protection and sun protection.","Hard hat when on foot near the arms, chains or a raised skip.","P2 dust mask when tipping dusty loads."]],
+      ["warning","Daily pre-start (record on the truck pre-start in McKimm Field)",{ l:[
+        "<strong>Every chain, link by link:</strong> no stretched, bent, twisted, cracked, gouged, worn or heat-damaged links; no knots; no welding or home-made repairs. Shorteners and swivels work.",
+        "<strong>Every hook:</strong> not opened out or bent; the <strong>spring safety latch closes by itself</strong>. Missing or broken latch = chain out of service.",
+        "Chain ID tags present and readable (grade and working load limit).",
+        "Arms, pins and bushes, arm rams, hydraulic hoses and fittings: no cracks, leaks or chafing. <strong>Never feel for a hydraulic leak with your hand.</strong>",
+        "Stabiliser legs extend and retract; pads on board.",
+        "Side controls return to neutral; remote charged, its <strong>stop button tested</strong>; beacon, work lights, reversing alarm and camera work; handbrake alarm works.",
+        "Load restraint gear and the skip cover or net on board."],
+        a:"<strong>Any fail: do not use it. Tag it out, record it on the pre-start and tell the Supervisor.</strong> Chains, hooks and the lifter are examined by a competent person <strong>every 6 months</strong> and recorded in the Asset Register; the lifter structure, rams and hoses at least <strong>every 12 months</strong>. Safety defects are repaired by a qualified mechanic." }],
+      ["warning","Check the skip before you lift it",{ l:[
+        "<strong>All four lugs</strong>, especially the <strong>rearmost lugs</strong> that take the tipping chains: not bent, cracked, worn thin or rusted through; welds sound.",
+        "<strong>No lip, plate or edge</strong> sticking out next to the rearmost lugs. A tipping hook can catch on it instead of seating in the lug, look fine, then slip off mid-tip and throw the skip. Report any skip with a lip; it goes back to the depot for repair.",
+        "Doors closed and locked.",
+        "<strong>Not overloaded or overfilled:</strong> load below the top edge, no heavy soil, concrete or rubble in a skip not rated for it. If in doubt, do not lift it; call the Supervisor.",
+        "No gas bottles, drums, batteries, chemicals, syringes or suspected asbestos visible. If you see any: do not lift, photograph it from a distance and call the Supervisor."] }],
+      ["danger","Setting up on site",{ o:[
+        "Walk the site first. <strong>Look up</strong> for power lines, branches and gutters. <strong>Look down</strong> for soft ground, pits, septic tanks, drains and pavers.",
+        "Park square to the skip on <strong>firm, level ground</strong>, clear of walls, fences and parked cars, so nobody can be trapped if the truck moves.",
+        "<strong>Handbrake on before you leave the cab.</strong> Chock the wheels if there is any slope.",
+        "<strong>Lower both stabiliser legs onto pads</strong> before moving the arms. On soft ground use the larger pads or mats.",
+        "Set up the <strong>exclusion zone</strong> with cones: customers, children, pets and passers-by stay outside. If they will not, stop.",
+        "<strong>Power lines:</strong> keep the arms, chains and skip at least 3 m from any line. Between 3 m and 6.4 m a trained spotter is needed (Work Near Electric Lines SOP). If you cannot be sure, do not lift."] }],
+      ["danger","Crush zones and the remote", { h: SKIP_FIG2 + "<ul><li><strong>Nobody stands between the truck and the skip, under the arms or a raised skip, or behind or beside a skip that is moving.</strong></li><li>Work the controls from where you can see the chains, the skip and the area behind the truck.</li><li><strong>Remote:</strong> test its stop button each day. <strong>Switch it off before you enter the crush zone</strong> to rig or unhook chains, and keep it on you, never in a pocket while switched on or left lying about. A worn or faulty remote is tagged out. (A WA skip driver was killed in 2024 after entering the crush zone with a live remote.)</li></ul>" }],
+      ["danger","Picking up a skip",{ o:[
+        "Arms out, controls in neutral, <strong>remote switched off</strong>. Walk to the skip.",
+        "Hook the <strong>four lifting chains</strong> to the skip&rsquo;s side lifting lugs, two each side. Chains <strong>not twisted or knotted</strong>, and shortened evenly so the skip will hang level.",
+        "<strong>Check every hook is fully on its lug and the safety latch is closed.</strong> Do not assume: look at all four.",
+        "Step back out of the crush zone to the control position. Switch the remote back on if using it.",
+        "Take up the slack slowly. <strong>Lift the skip a few centimetres and stop</strong> (test lift). Check: the skip hangs level, all hooks are still on, the truck and stabilisers are steady.",
+        "<strong>Overload signs:</strong> the front of the truck goes light, a stabiliser lifts, the arms slow or stall, or the relief valve hisses. <strong>Lower the skip at once.</strong> Do not try again; the load must be reduced. Never lift a skip by raising one side at a time to free it.",
+        "Lift smoothly, without jerking, and bring the skip onto the body. Lower it fully onto the bed and its chocks.",
+        "Secure the skip as the manual requires (chains tensioned or clamps on). Arms to the travel position, stabilisers up and locked."] }],
+      ["warning","Covering the load and travelling",["Load below the top edge and <strong>covered with the net or tarp, put on from the ground</strong>. Do not climb onto the skip or the truck body to sheet it.","Check the truck&rsquo;s loaded height for trees, awnings and bridges.","Stay within <strong>GVM and axle limits</strong>; if in doubt go over the weighbridge.","Check the skip, chains and cover again after the first few hundred metres."]],
+      ["danger","Tipping",{ o:[
+        "Tip only on <strong>firm, level ground</strong>, in a calm wind, where the tip site staff direct. Stabilisers down on pads.",
+        "Look up and behind. <strong>Nobody behind or beside the truck.</strong>",
+        "With the remote off, hook the <strong>two tipping chains</strong> from the truck&rsquo;s tipping points to the skip&rsquo;s <strong>rearmost lugs</strong> (the end furthest from the truck), one each side, the same length.",
+        "<strong>Check both tipping hooks are fully seated in the lugs, not caught on a lip or edge</strong>, and latched. False engagement is often hard to see from the controls, so look closely before you step back.",
+        "From the control position, raise the arms slowly. The skip rotates on the tipping chains and the load slides out the back.",
+        "<strong>Stop and lower at once</strong> if the truck front lifts, a stabiliser leaves the pad, a chain jumps, or the load hangs up. <strong>Never climb into, onto or beside a skip to free a load.</strong>",
+        "Lower the skip fully back onto the bed, unhook the tipping chains, and put the arms back into the travel position before moving."] }],
+      ["warning","Setting a skip down",{ o:[
+        "Pick a firm, flat spot clear of power lines, trees, drains, gutters and services, and away from where it will block the road or footpath unless there is a permit.",
+        "On driveways, pavers or soft ground, put <strong>timber boards or runners</strong> under the skip.",
+        "Stabilisers down, exclusion zone set, nobody behind or beside.",
+        "Swing the skip off slowly and <strong>lower it gently</strong>; do not drop it the last bit.",
+        "Only when the skip is fully down and stable: remote off, walk in, unhook the chains and hang them up so they cannot swing.",
+        "Photograph the placed skip when the app asks, and tell the customer the limits (no overfilling, no hazardous waste, do not climb in)."] }],
+      ["warning","Maintenance and cleaning around the lifter",["Never work under raised arms or a raised skip unless they are on the proper safety props. Do not rely on hydraulics.","Handbrake on, engine off, key out, remote off and stored before any cleaning or greasing.","Grease pins and check chains as the manual says. Chains are never repaired or welded on site: replace them with chains of the same grade and working load limit.","Record servicing in the Maintenance Record against the truck in the Asset Register."]],
+      ["danger","Emergency",["<strong>Person caught or crushed:</strong> hit the stop on the remote or controls, call 000, then Al (0408 632 007). Lower the load only if it is safe to do so.","<strong>Chain or hook fails, or skip jams part-tipped:</strong> stop, keep everyone well clear, do not go under or beside it, call the Supervisor.","<strong>Truck goes light or starts to tip:</strong> lower the load straight away and stop.","<strong>Power line contact:</strong> stay in the cab if you are in it; warn people away; call 000. Only leave for fire: jump clear with feet together and shuffle away.","Any near miss, dropped skip or false engagement is reported the same day (Incident SOP). Serious incidents are notifiable to SafeWork NSW on 13 10 50."]],
+      ["info","Sources",{ p:"Written for McKimm Civil from: WorkSafe WA safety alert on remote controls for skip bin loaders (2026); WorkSafe Victoria safety alert on loading and unloading skip bins; UK HSE safety bulletin on false engagement of skip tipping hooks; the States of Jersey code of practice for skip and hook loaders (thorough examination of chains every 6 months); the West-Trans Equipment DS 60S skip loader product page and specification sheet. <strong>Check against the manufacturer&rsquo;s operator manual for our lifter before the crew signs.</strong>" }]
+    ] });
+
+
+  /* ============================ 23. GETTING ON AND OFF PLANT, PARKING (v1.0, 16 Nov 2026) ============================ */
+  reg({ id:"MCK-SOP-MOUNT-01", everyone:true, key:"mount", icon:"🪜", name:"Getting On and Off Plant and Trucks, Parking and Shutting Down", short:"getting on and off plant",
+    applies:"everyone who gets on or off, parks, or leaves any McKimm Civil or Snowy Skips machine, truck, ute or trailer: excavators, skid steer, grader, roller, forklift, tippers, the skip loader, the bitumen truck, utes and towed plant.",
+    ack:" I understand I use three points of contact, never jump down, and never leave the seat until the attachments are on the ground, the brake is on and the controls are locked.",
+    checks:["Faces the machine and keeps three points of contact on the way up and down, using only the steps and grab handles",
+      "Checks the steps and boots for mud, ice, frost and oil first, and carries nothing in their hands while climbing",
+      "Never jumps down, never uses the steering wheel, levers, door or tyres as a handhold, and looks at the ground before stepping off",
+      "Parks on firm level ground, clear of trench edges, traffic and overhead lines",
+      "Lowers every ground-engaging tool or attachment flat to the ground before getting off",
+      "Neutral, park brake on, hydraulic lockout lever up, engine off and key out when leaving the machine",
+      "Knows the machine-specific rules: skid steer arms down, tipper body down, forklift forks flat, skip loader arms in travel",
+      "Signals and waits for the operator to lower and lock out before walking up to a machine"],
+    sections:[
+      ["info","Purpose","Falls getting on and off plant are one of the most common serious injuries in civil work, and machines that move after the operator has got off kill people every year. This SOP sets one way of getting on, getting off, parking and shutting down for <strong>every</strong> McKimm Civil and Snowy Skips machine, truck and ute. Where a machine&rsquo;s operator&rsquo;s manual is stricter, the manual wins."],
+      ["danger","When you must sign",{ l:["Every worker reads and signs this SOP at induction, because everyone gets on and off plant and trucks.","The Supervisor checks it in practice the first time you operate each machine, and records it with your machine sign-off."] }],
+      ["danger","Three points of contact, every time",{ l:[
+        "<strong>Face the machine</strong> going up and coming down, like a ladder.",
+        "<strong>Keep three points of contact at all times:</strong> two hands and one foot, or two feet and one hand.",
+        "<strong>Use only the steps, rungs and grab handles built for access.</strong> Never use the steering wheel, levers, joysticks, door, door frame, mirror brackets, hoses, tyres or tracks as a step or handhold.",
+        "<strong>Never jump down</strong>, even from the bottom step. Step down onto the ground.",
+        "<strong>Nothing in your hands while climbing.</strong> Put tools, the phone, the crib bag and the fuel can on the floor or deck first and lift them up after, or use a bag or line.",
+        "Take your time. Most falls happen when someone is rushing, tired or looking at something else."] }],
+      ["warning","Before you climb",{ l:[
+        "<strong>Clean your boots</strong> and check the steps and handles for mud, clay, oil, grease, ice and frost. In winter, frost and ice on steps are common early in the morning around Berridale and Jindabyne: knock them off or use the de-icer before climbing.",
+        "Safety boots with good tread. Worn, clogged or slippery soles are replaced.",
+        "Use a light at night or in poor light.",
+        "<strong>Damaged, loose or missing steps, rungs or grab handles:</strong> do not use that access. Report it on the prestart and tag the machine until it is fixed."] }],
+      ["danger","Never get on or off a moving machine",{ l:[
+        "Only get on or off when the machine is <strong>stopped, parked and shut down</strong> as below. Never ride on steps, decks, tracks, buckets or the back of a truck.",
+        "Never climb onto a machine someone else is running. <strong>Get the operator&rsquo;s attention first</strong> (eye contact and a signal), wait for them to lower the attachment, lock out the controls and wave you in, then approach from where they can see you (see the Working Near Traffic &amp; Plant SOP)."] }],
+      ["danger","Parking: where",{ l:[
+        "<strong>Firm, level ground</strong> wherever you can. Not on soft ground, fresh fill or a slope you can avoid.",
+        "<strong>Well back from trench and excavation edges</strong>: at least the depth of the excavation, and never with tracks or wheels on a spoil heap or near a batter.",
+        "Clear of traffic, haul roads, other plant&rsquo;s swing radius, gates and access tracks, and clear of overhead power lines.",
+        "On a slope you cannot avoid: park across the slope where the machine allows, lower attachments to the ground on the downhill side, and chock wheeled plant and trucks.",
+        "At the end of the day: in the agreed parking area, locked, keys in the agreed place."] }],
+      ["danger","Shutting down before you leave the seat",{ o:[
+        "Bring the machine to a full stop.",
+        "<strong>Lower every ground-engaging tool or attachment flat to the ground</strong>: bucket, blade, ripper, forks, hammer, auger, compactor plate. Take the weight off the hydraulics.",
+        "Transmission in <strong>neutral</strong> (or park), <strong>park brake on</strong>.",
+        "<strong>Hydraulic lockout (safety) lever up</strong> or controls locked out, as the machine has.",
+        "Idle to cool down as the manual says, then <strong>engine off</strong>. Operate the controls once to release stored hydraulic pressure if the manual says to.",
+        "<strong>Remove the key</strong> whenever you leave the machine unattended, and always before anyone works on it (see the isolation steps in the Workshop SOP).",
+        "Seatbelt off last, then get off using three points of contact. Look at the ground before you step down: trench edges, holes, rocks, traffic."] }],
+      ["warning","Machine-specific rules",{ l:[
+        "<strong>Excavators:</strong> bucket flat on the ground, hydraulic lockout lever up before standing up. Never leave the cab with the boom raised or a load on the hook.",
+        "<strong>Skid steer:</strong> lower the arms and bucket fully to the ground before lifting the lap bar. <strong>Never get in or out with the arms raised</strong>: people have been crushed between the arms and the frame. If the arms must stay up for service, fit the arm support (lift arm lock) first.",
+        "<strong>Grader:</strong> blade and ripper down on the ground, park brake on.",
+        "<strong>Roller:</strong> park brake on, vibration off, drum on firm ground away from the edge of the fill.",
+        "<strong>Forklift:</strong> forks lowered flat to the ground and tilted slightly forward, mast vertical, park brake on.",
+        "<strong>Tipper trucks:</strong> body fully down before driving or getting out, park brake on, chock on any slope.",
+        "<strong>Skip loader (DS 60S):</strong> arms in the travel position or the skip on the ground, stabilisers up before driving, park brake on before leaving the cab (see the Skip Loader SOP).",
+        "<strong>Bitumen truck:</strong> sprayer off and isolated, park brake on (see the Bitumen SOP).",
+        "<strong>Utes and towing:</strong> park brake on, in gear or park, chock the trailer before unhitching (see the Trucks &amp; Towing SOP).",
+        "<strong>Climbing onto a truck deck or body:</strong> use the fitted ladder or steps, never the wheels or the tow coupling. Sheet and tarp loads from the ground where you can."] }],
+      ["warning","Maintenance and checks",["Do as much as you can <strong>from the ground</strong>: check gauges and levels, grease and wash from ground level or a proper platform.","Never stand on tracks, buckets, forks, the blade, the bonnet or a raised attachment. Use a step platform or ladder that suits the job (see the Ladders and Working at Heights SOP).","Never work under a raised attachment, body or arm unless it is on the proper mechanical support."]],
+      ["info","Report it",["A slip, trip or fall getting on or off, even with no injury, is reported the same day as a near miss in McKimm Field.","Report damaged steps, rungs, grab handles, mirrors or lights on the prestart."]],
+      ["info","Sources","Written for McKimm Civil from: Workplace Health and Safety Queensland incident alert &ldquo;Fall from earthmoving machinery&rdquo; (2020); NSW Resources Regulator safety bulletin SB18-07 &ldquo;Safe systems of work for mobile plant&rdquo;; NSW Work Health and Safety Regulation (powered mobile plant); and the operator&rsquo;s manuals for our machines."]
+    ] });
+
+
+  /* ============================ 24. SERVICING AND REPAIRING PLANT (v1.0, 16 Nov 2026) ============================ */
+  reg({ id:"MCK-SOP-SERVICE-01", key:"service", icon:"🔧", name:"Servicing and Repairing Plant and Trucks: Isolation, Stored Energy and Safe Support", short:"servicing plant and trucks",
+    applies:"anyone who services, repairs, greases, cleans, adjusts or inspects any McKimm Civil or Snowy Skips machine, truck, trailer or small plant, at the depot or in the field.",
+    ack:" I understand I never work on a machine until it is parked, chocked, isolated with my own tag and the key in my pocket, every stored energy is released or blocked, and anything raised is on a mechanical support.",
+    comp:"Servicing and repairing plant (isolation and stored energy)",
+    checks:["Plans the job: manual and service sheet, parts, tools, a safe level spot, and who signs it off (competent person, qualified mechanic or HVIS inspector)",
+      "Parks on level hard ground, lowers all attachments to the ground, park brake on, chocks both sides of a wheel",
+      "Engine off, key removed and kept in their own pocket, Do Not Operate tag on the steering wheel or controls, battery isolator off where fitted",
+      "Proves the isolation: tries the start and the controls and confirms nothing moves",
+      "Releases or blocks every stored energy: hydraulic pressure, air tanks, springs and track adjusters, raised parts, heat, and tyre pressure",
+      "Supports anything raised with rated stands, the body prop or the arm lock, never jacks or hydraulics alone",
+      "Handles oil, coolant and filters with trays and gloves, cleans up spills and puts waste in the right bins",
+      "Never feels for a hydraulic leak with a hand, and knows a pinhole injection injury is a hospital emergency",
+      "Finishes properly: tools out, guards back, everyone clear, removes only their own tag, test runs, records it in the Maintenance Record"],
+    sections:[
+      ["info","Purpose","Machines and trucks kill and maim people who work on them when they move, drop or release energy unexpectedly: a truck rolling off a jack, a tipper body or skid steer arm coming down, a hydraulic line or a track adjuster letting go, a tyre rim blowing apart, or someone starting the engine. This SOP sets how we make a machine safe <strong>before</strong> anyone works on it. It is read with the Workshop Safety SOP (hot work, grinders, tyres, jacks) and the Getting On and Off Plant SOP. Where a machine&rsquo;s manual is stricter, the manual wins."],
+      ["danger","When you must sign, and who may do what",{ l:[
+        "You do not have to sign this SOP straight away. <strong>Read and sign it, and be signed off by the Supervisor in a practical, before you first service or repair a machine for McKimm Civil.</strong>",
+        "<strong>Routine servicing</strong> (oil and filter changes, greasing, fluid top-ups, belts, looking it over) can be done and signed off by a competent person signed off by the Supervisor.",
+        "<strong>Anything affecting safety</strong> (brakes, steering, hydraulics under load, lifting gear, chains and hooks, ROPS/FOPS, seatbelts, guards, wheels and tyres, the skip loader and the tipper body) is repaired or signed off by a <strong>qualified mechanic</strong>.",
+        "<strong>Heavy vehicle inspections</strong> are done by the HVIS inspector.",
+        "If you are not sure you can do the job safely, stop and ask."] }],
+      ["warning","Plan the job",{ l:[
+        "Read the manual or service sheet for that machine. Check the service interval in the Asset Register.",
+        "Get the parts, the right tools, rated stands and chocks, drip trays, rags and the spill kit before you start.",
+        "<strong>Where:</strong> the depot hardstand or workshop whenever you can. In the field: firm level ground, well away from traffic, trenches and other plant, with cones around you.",
+        "Tell someone what you are doing. Do not work under a machine on your own (see the Working Alone SOP).",
+        "PPE: safety boots, eye protection, nitrile gloves for oil and fuel, hearing protection near running engines, and close-fitting clothing with no rings or loose sleeves."] }],
+      ["danger","Step 1: park it safely",{ o:[
+        "<strong>Level, hard ground.</strong> No slopes.",
+        "<strong>Lower every attachment flat to the ground</strong>: bucket, blade, ripper, forks, tipper body, skip loader arms. Skid steer arms fully down.",
+        "Transmission in neutral or park, <strong>park brake on</strong>.",
+        "<strong>Chock the wheels on both sides</strong> of at least one wheel that will stay on the ground. Tracked machines: on level ground with the attachment down.",
+        "Hydraulic lockout lever up."] }],
+      ["danger","Step 2: isolate it and tag it",{ o:[
+        "<strong>Engine off. Take the key out and keep it in your own pocket</strong> for the whole job. If two people work on it, each keeps control (one key holder, both names on the tag, or a lock box).",
+        "Hang a <strong>&ldquo;DANGER &ndash; DO NOT OPERATE&rdquo; tag</strong> on the steering wheel or main controls, with your name, the date and what you are doing.",
+        "Turn the <strong>battery isolator off</strong> where fitted. For electrical work, starter work, or welding: disconnect the battery, <strong>negative (earth) lead first</strong>, and refit it last.",
+        "<strong>Prove it is dead:</strong> try to start it and try the controls. Nothing should turn over or move. Then put the start switch back to off.",
+        "Towed plant and trailers: unhitch only when chocked and the jockey wheel or stands are down, or leave hitched with the towing vehicle isolated too."] }],
+      ["danger","Step 3: release or block the stored energy",{ l:[
+        "<strong>Gravity:</strong> anything raised can fall. If an arm, body, cab or attachment must be up for the job, put it on its <strong>mechanical support</strong> first: the tipper body prop, the skid steer lift arm lock, the cab tilt lock, or rated stands. <strong>Never rely on hydraulics, a jack or a chain block alone.</strong>",
+        "<strong>Hydraulic pressure:</strong> with the attachments on the ground and the engine off, turn the key to on (engine not running), work every control through its full movement to release trapped pressure as the manual says, then key off and out. Loosen hydraulic fittings slowly, under a rag, standing to one side. Treat accumulators as charged until bled.",
+        "<strong>Never feel for a hydraulic or fuel leak with your hand.</strong> Use cardboard or a piece of timber. Oil injected through the skin, even through a pinhole, needs a hospital the same day, even if it looks small.",
+        "<strong>Air (trucks):</strong> drain the air tanks before working on brakes or air lines. <strong>Never open a spring brake chamber</strong>; the spring inside can kill. Wind the spring brakes off only with the proper caging bolt, if the job requires it.",
+        "<strong>Springs and track adjusters:</strong> track tensioners hold grease at very high pressure. Loosen track tension only through the relief valve, a little at a time, with your face and body to the side. <strong>Never remove the grease fitting or the valve body.</strong> Suspension springs, gas struts and the bonnet stays can fly: support them before release.",
+        "<strong>Heat:</strong> let the engine, exhaust, turbo, hydraulic oil and coolant cool. <strong>Never open a hot radiator or coolant cap</strong>; cover it with a rag and release slowly once cool.",
+        "<strong>Fuel:</strong> common-rail diesel lines run at very high pressure. Wait the time the manual says after shut-down before loosening any injector line.",
+        "<strong>Electrical:</strong> battery isolated (Step 2). Batteries give off explosive gas: no sparks, grinding or smoking near them, and wear eye protection.",
+        "<strong>Tyres:</strong> fully deflate a tyre (valve core out) before removing a wheel or working on the rim. Inflate truck and split-rim tyres only in the tyre cage with a clip-on chuck and a long hose, standing to the side (see the Workshop Safety SOP). Never weld or heat near a tyre or rim."] }],
+      ["danger","Lifting and supporting",{ l:[
+        "Jack only at the manufacturer&rsquo;s jacking points, on hard level ground, with a jack rated above the load.",
+        "As soon as it is raised, put it on <strong>rated stands</strong> on a firm base and lower onto them. <strong>No bricks, blocks of wood, spare wheels or the jack alone.</strong>",
+        "Chocks stay in on the wheels still on the ground.",
+        "Excavators: never work under a boom or arm held up on the hydraulics; lower it to the ground or support it as the manual says. Never use the machine to raise itself while anyone is underneath.",
+        "Never get under a machine or between it and the ground or a wall until the supports are in and the isolation is proved."] }],
+      ["warning","If the engine must run (checks and adjustments)",{ l:[
+        "Only for the checks that need it, and only with <strong>a second person in the seat</strong> controlling the machine, in sight and in talking range, with the attachments on the ground and the lockout lever up.",
+        "Keep clear of fans, belts, pulleys, drive shafts and the exhaust. Guards back on as soon as the check is done.",
+        "Outdoors, or with the exhaust extracted. Never run an engine in a closed shed."] }],
+      ["warning","Oils, coolant, filters and the environment",{ l:[
+        "Drain into trays, not onto the ground. Spill kit within reach; clean up spills straight away (see the Chemicals and Fuel SOPs).",
+        "Waste oil, coolant, filters, oily rags and batteries go into the marked containers at the depot for collection by a licensed waste contractor. Never into drains or the general skip.",
+        "Wash hands before eating or smoking. Use gloves and barrier cream: used oil causes skin problems."] }],
+      ["danger","Finishing the job",{ o:[
+        "Check all bolts, fittings and drain plugs are tight and fluid levels correct. No tools, rags or parts left in the engine bay, on tracks or on the frame.",
+        "Refit every guard, cover and the battery (negative last).",
+        "Remove stands, props and arm locks. Lower anything raised.",
+        "Call out and look: <strong>everyone clear</strong> of the machine.",
+        "<strong>Only the person who put a tag on removes it.</strong> If they have left site, the Supervisor checks the machine and then removes it.",
+        "Start it and test it from the seat. Check for leaks and that the controls, brakes and alarms work.",
+        "<strong>Record it in the Maintenance Record</strong> in McKimm Field against the machine in the Asset Register, with the hours or km, what was done, parts used and the right sign-off level."] }],
+      ["danger","Defects found",["Any defect that affects safety: the machine is <strong>out of service</strong>. Tag it &ldquo;OUT OF SERVICE&rdquo;, remove the key, record it, and tell the Supervisor. It goes back to work only after a qualified mechanic signs it off."]],
+      ["danger","Emergency",["<strong>Crushed or trapped:</strong> call 000, then Al (0408 632 007). Only lift or move the load off the person if it can be done safely and quickly with a machine or jack.","<strong>Hydraulic or fuel injection injury:</strong> hospital immediately, even if it looks like a pinprick. Tell them it is an injection injury.","<strong>Burns from coolant or oil:</strong> cool running water for 20 minutes, then medical help.","<strong>Fire:</strong> extinguisher only if safe, otherwise move away and call 000.","Report every injury and near miss the same day (Incident SOP)."]],
+      ["info","Sources","Written for McKimm Civil from: Safe Work Australia Code of Practice <em>Managing the risks of plant in the workplace</em>; the NSW Work Health and Safety Regulation (plant, isolation and stored energy); safety alerts on vehicle maintenance and tyre handling; and the operator and service manuals for our machines. Check each machine&rsquo;s manual for its own pressure-release and support steps."]
+    ] });
+
+
+  /* ============================ 25. QUICK HITCH AND ATTACHMENTS (v1.0, 16 Nov 2026) ============================ */
+  reg({ id:"MCK-SOP-ATTACH-01", key:"attach", icon:"🔗", name:"Excavator and Skid Steer Quick Hitches and Attachments", short:"quick hitch and attachments",
+    applies:"anyone who operates an excavator or skid steer with a quick hitch, changes an attachment, connects attachment hydraulics, or works near a machine fitted with an attachment.",
+    ack:" I understand an attachment can drop off a quick hitch without warning, that I check the safety pin or lock and do the bump test after every change, and that nobody stands under or near the attachment while it is raised.",
+    comp:"Excavator quick hitch and attachments",
+    checks:["Knows which hitch each machine has (manual, semi-automatic or automatic) and where its safety pin or lock is",
+      "Checks the attachment, pins, bushes, hitch and lock for wear and damage before fitting it",
+      "Fits the attachment with nobody within the swing radius, engages the primary lock and then the safety pin and lynch pin (or confirms the automatic lock indicator)",
+      "Does the bump test: curls the attachment, presses it to the ground and drags it back, and watches that it stays fully locked",
+      "Connects attachment hydraulics only with the engine off and pressure released, couplers clean and fully locked",
+      "Keeps people out from under and beside a raised attachment and never uses the quick hitch or bucket teeth to lift",
+      "Stores removed attachments flat and stable, pins in, away from walkways",
+      "Knows the hitch release switch is only used with the attachment on the ground"],
+    sections:[
+      ["info","Purpose","In Australia people have been killed and badly injured by buckets and attachments that came off quick hitches without warning, most often because the <strong>safety pin or lock was not fitted</strong> after an attachment change, or because the hitch was not fully engaged. This SOP covers quick hitches and attachments on our excavators and skid steer: buckets, the concrete mixing bucket, and any other attachment. Each attachment&rsquo;s own manual is followed as well."],
+      ["danger","When you must sign",{ l:["You do not have to sign this SOP straight away. <strong>Read and sign it, and be signed off by the Supervisor in a practical, before you first change an attachment or operate a machine with a quick hitch.</strong>","An operator new to a particular hitch or attachment is shown it by the Supervisor first, even if they are signed off on others."] }],
+      ["warning","Know your hitch",{ l:[
+        "<strong>Manual and semi-automatic hitches</strong> need the operator to get out and fit the <strong>safety pin and its lynch pin</strong> (or other mechanical lock) by hand at every change. A semi-automatic hitch can look engaged when it is not.",
+        "<strong>Automatic hitches</strong> lock from the cab and show the lock on an indicator. Check the indicator and still do the bump test.",
+        "The <strong>hitch release switch</strong> in the cab is only touched with the attachment resting on the ground. Keep the switch guard or cover in place.",
+        "Know the rated capacity of the machine with that attachment fitted. A heavy attachment (like a full mixing bucket) uses up capacity and changes stability."] }],
+      ["warning","Before fitting an attachment",{ l:[
+        "Attachment on firm, level ground, sitting square, not leaning against anything.",
+        "Check the attachment pins, bushes and ears, the hitch hooks and lock, and the safety pin and lynch pin: no cracks, excessive wear, bent pins or missing parts. Worn or damaged = do not use, tag it and tell the Supervisor.",
+        "Make sure the attachment is compatible with the hitch and the machine. If in doubt, ask.",
+        "<strong>Nobody within the swing radius</strong> while you line up and engage."] }],
+      ["danger","Fitting: engage, lock, test",{ o:[
+        "Pick up the front pin first, curl to engage the rear pin, and lock the primary hitch as the manual says.",
+        "<strong>Fit the safety pin and its lynch pin</strong> (manual and semi-automatic hitches), or confirm the automatic lock indicator shows locked. To fit pins: bucket on the ground, hydraulic lockout lever up, then get out using three points of contact.",
+        "<strong>Bump test:</strong> back in the seat, curl the attachment in, then press it down firmly onto the ground and drag it back towards the machine a short way. It must not move on the hitch. Look at both pins.",
+        "Only now start work. Repeat the check after any knock or if anything sounds or looks wrong."] }],
+      ["warning","Attachment hydraulics (mixing bucket, hammer, auger, tilt bucket)",{ l:[
+        "Engine off, attachment on the ground, and release the hydraulic pressure as the manual says before connecting or disconnecting hoses.",
+        "Couplers clean, dust caps on when disconnected, couplers pushed fully home and locked. Hoses routed so they cannot pinch or snag.",
+        "Check the auxiliary flow setting suits the attachment before running it.",
+        "<strong>Never feel for a leak with your hand</strong>. An injection injury needs hospital straight away."] }],
+      ["danger","Working with an attachment",{ l:[
+        "<strong>Nobody under, beside or in front of a raised attachment.</strong> Spotters and other workers stay outside the swing radius and get the operator&rsquo;s attention before approaching.",
+        "Do not use the quick hitch, bucket teeth or a bucket hook that is not rated as a lifting point to lift anything. We do not use plant as a crane (see the Pipe Laying &amp; Lifting SOP).",
+        "Keep the attachment low when travelling. Slow down on slopes with a heavy attachment.",
+        "Do not use an attachment for a job it was not made for (for example, prying with the hitch or digging with a mixing bucket)."] }],
+      ["warning","Removing and storing attachments",{ l:[
+        "Set the attachment down flat on firm ground, then remove the safety pin and release the hitch.",
+        "Store attachments flat and stable, pins in, hoses capped, away from walkways and access tracks, so they cannot tip or roll.",
+        "Never leave an attachment hanging partly engaged on the hitch."] }],
+      ["warning","Maintenance",["Grease pins and the hitch as the manual says. Check hitch wear, the lock and the safety pin at every prestart.","Any defect in the hitch or its lock is a safety defect: out of service until a qualified mechanic signs it off. Record it in the Maintenance Record."]],
+      ["danger","Emergency",["<strong>Attachment drops or a person is struck:</strong> stop, lower everything to the ground, call 000, then Al (0408 632 007). Do not move the attachment off a person unless it is safe and quick to do with the machine.","Report every dropped or partly released attachment the same day as a dangerous incident (Incident SOP). A dropped attachment is notifiable to SafeWork NSW (13 10 50)."]],
+      ["info","Sources","Written for McKimm Civil from: Safe Work Australia information sheet <em>Quick-hitches for earthmoving machinery</em>; WorkSafe Victoria safety alert on semi-automatic quick hitches on excavators; and the hitch and attachment manuals for our machines."]
+    ] });
+
+
+  /* ============================ 26. CONCRETE MIXING BUCKET (v1.0, 16 Nov 2026) ============================ */
+  reg({ id:"MCK-SOP-MIXER-01", key:"mixer", icon:"🌀", name:"Concrete Mixing Bucket (Excavator Attachment)", short:"concrete mixing bucket",
+    applies:"anyone who fits, operates, loads, discharges, cleans or works near the hydraulic concrete mixing bucket.",
+    ack:" I understand the mixing auger can take a hand or arm off, that nobody reaches into the bucket or the discharge while it can turn, and that I never stand under the raised bucket.",
+    comp:"Concrete mixing bucket",
+    checks:["Fits the bucket by the Quick Hitch SOP: safety pin in, bump test, hydraulics connected with pressure released",
+      "Does the pre-use check: paddles and shaft, motor and hoses, wiring, discharge door, decals, nothing left inside",
+      "Works out the load: bucket plus wet concrete within the machine's rated capacity with that attachment, on firm level ground",
+      "Loads from outside the swing radius with the auger stopped and hydraulics locked out, and never climbs onto the bucket",
+      "Wears the PPE for cement: eye protection, P2 mask when handling bags, waterproof gloves, long sleeves",
+      "Discharges with the bucket low and nobody in front of or under it; never pushes concrete with a hand or tool while the auger turns",
+      "Clears a jam by reversing the auger, then a full shutdown and isolation before touching anything inside",
+      "Washes out into the washout area, never a drain or waterway, then stores the bucket clean and stable"],
+    sections:[
+      ["info","Purpose and the attachment",{ h:"<p>Our hydraulic <strong>concrete mixing bucket</strong> fits the excavators on the quick hitch. A hydraulic motor turns an <strong>open auger with mixing paddles</strong> along the bottom of the bucket to mix and then push the concrete out of the discharge end. <strong>The auger is a crush and amputation hazard</strong>, the bucket full of wet concrete is very heavy, and cement causes serious burns. This SOP is read with the Quick Hitch and Attachments SOP.</p><figure style=\"margin:8px 0;max-width:360px\"><img src=\"mixer-bucket.jpg\" alt=\"Our concrete mixing bucket\" loading=\"lazy\" style=\"width:100%;border-radius:8px;border:1px solid #e2e8f0\"><figcaption style=\"font-size:12px;margin-top:3px\">Our mixing bucket: excavator hitch pins on top, hydraulic motor at the end, open auger and paddles inside. Note the pinch point warning decal.</figcaption></figure><p><strong>Our bucket has no guard grate over the auger.</strong> That makes the rule never to reach in absolute. Al to check the make and model and get the manual, and to consider fitting a grate.</p>" }],
+      ["danger","When you must sign",{ l:["You do not have to sign this SOP straight away. <strong>Read and sign it, and be signed off by the Supervisor in a practical, before you first fit or use the mixing bucket.</strong>","You must also be signed off on the Quick Hitch and Attachments SOP and the excavator you are using."] }],
+      ["warning","PPE",["<strong>Eye protection</strong> (cement splashes cause eye burns), <strong>waterproof gloves</strong> (nitrile or PVC, not leather), long sleeves and long trousers, safety boots, hi-vis, hard hat.","<strong>P2 dust mask</strong> when opening and emptying cement bags.","Gumboots if you will stand in wet concrete. Do not let wet concrete sit against skin or soak into boots or clothing."]],
+      ["warning","Pre-use check",{ l:[
+        "Paddles, auger shaft and bearings: not bent, cracked or loose. No old hardened concrete jamming the auger.",
+        "Hydraulic motor, hoses and couplers: no leaks, chafing or kinks. Electrical cable and plugs (if fitted for the diverter) undamaged.",
+        "Discharge end and any door: clear and working.",
+        "Hitch pins and ears sound. Warning decals readable.",
+        "<strong>Nothing left inside</strong> the bucket: tools, rags, bag offcuts.",
+        "Any fault: tag it out and tell the Supervisor."] }],
+      ["danger","Fitting and connecting",{ o:[
+        "Fit the bucket following the <strong>Quick Hitch and Attachments SOP</strong>: safety pin and lynch pin in (or lock indicator checked), then the bump test.",
+        "Engine off, bucket on the ground, hydraulic pressure released before connecting the hoses. Couplers clean and fully locked. Connect any electrical plug.",
+        "Set the auxiliary flow to suit the motor. Run the auger slowly with the bucket empty and on the ground to check direction and that nothing binds."] }],
+      ["danger","Weight and stability",{ l:[
+        "Wet concrete weighs about <strong>2.4 tonnes per cubic metre</strong>. A full mixing bucket can be heavier than anything else that excavator lifts.",
+        "Know the bucket&rsquo;s empty weight and capacity, and keep the bucket plus load within the machine&rsquo;s rated capacity for that reach. If in doubt, mix a smaller batch.",
+        "Work on firm level ground. Keep the loaded bucket <strong>low and close</strong> to the machine, and slew slowly. Do not travel on slopes with a full bucket."] }],
+      ["danger","Loading the bucket",{ o:[
+        "Lower the bucket flat on the ground. <strong>Auger stopped, auxiliary hydraulics off, hydraulic lockout lever up.</strong> The operator keeps hands off the controls while anyone is at the bucket.",
+        "People loading approach only after the operator signals. <strong>Never climb onto or into the bucket.</strong>",
+        "Add water first, then cement and aggregate, as the mix design or the bag says. Open cement bags at the edge of the bucket, standing upwind, mask on, and keep bag pieces out of the auger.",
+        "Loaders step back outside the swing radius and signal clear before the operator starts the auger."] }],
+      ["danger","Mixing",{ l:[
+        "Mix with the bucket low and level. Nobody within the swing radius while the auger turns.",
+        "If the mix is too dry and the auger labours or stalls, stop and add water, following the loading steps above. <strong>Never add material or water by hand while the auger turns.</strong>",
+        "If material builds up on the sides: stop, lower the bucket, auger off, lockout lever up, then scrape it in with a long-handled tool from outside the bucket."] }],
+      ["danger","Discharging",{ l:[
+        "Position the bucket low over the pour or the formwork. <strong>Nobody in front of, under or beside the discharge</strong> unless they are well clear and the operator can see them.",
+        "Run the auger to discharge. <strong>Never push, rake or guide concrete at the discharge with a hand, shovel or tool while the auger is turning.</strong> Stop the auger first, then move it.",
+        "If it binds, reverse the auger briefly. If that does not clear it, <strong>full shutdown and isolation</strong> (below) before you touch it.",
+        "Turn the auxiliary hydraulics off as soon as you finish."] }],
+      ["danger","Clearing a jam or working inside the bucket",{ o:[
+        "Lower the bucket flat to the ground.",
+        "Auxiliary hydraulics off, engine off, <strong>key out</strong> and in the pocket of the person clearing it; hydraulic lockout lever up; tag on the controls.",
+        "Release the hydraulic pressure as the manual says.",
+        "Only then reach in or work on the auger. Use tools, not hands, where you can."] }],
+      ["warning","Washing out and the environment",{ l:[
+        "Wash out straight after use, before the concrete sets, <strong>at the concrete washout area</strong> (a lined pit or bin), never into a drain, table drain, creek or the ground (see the Erosion, Sediment and Washout SOP).",
+        "Use a hose from outside the bucket. Run the auger in reverse slowly to agitate only with nobody near the bucket, then discharge into the washout.",
+        "Do not let concrete or water dry or freeze inside the bucket.",
+        "Concrete washwater is highly alkaline: avoid skin contact and rinse any splashes off straight away."] }],
+      ["warning","Storing",["Clean the bucket. Set it down flat and stable on firm ground or pallets, pins in, hoses capped, away from walkways.","Cover it, and grease the motor mount and pins as the manual says."]],
+      ["danger","Cement burns and emergencies",["<strong>Wet concrete on skin:</strong> wash off with plenty of clean water straight away. Cement burns can be deep and often hurt only hours later. Remove soaked clothing and boots.","<strong>Cement in the eye:</strong> flush with clean water for at least 20 minutes and get medical help.","<strong>Caught in the auger:</strong> stop the auger and the engine, call 000, then Al (0408 632 007). Do not reverse the auger to free someone unless the paramedics or Al say to.","Report every injury and near miss the same day (Incident SOP)."]],
+      ["info","Sources","Written for McKimm Civil from: a manufacturer&rsquo;s operator manual for an auger mixing bucket (Skid Pro); the Safe Work Australia quick hitch information sheet; Safe Work Australia guidance on working with cement and concrete; and our own Quick Hitch, Erosion and Washout, and Servicing SOPs. Check against the manual for our own bucket once the make is confirmed."]
     ] });
 
 })();
