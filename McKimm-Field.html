@@ -413,7 +413,7 @@ body{ background:var(--bg); }
 <script src="mckimm-assets.js"></script>
 <script src="mckimm-training.js"></script>
 <script src="mckimm-sops2.js"></script>
-<script src="mckimm-jobstart.js"></script>
+<script src="mckimm-sitemaint.js"></script>
 <script src="mckimm-brand.js"></script>
 <script>
 /* ============================================================
@@ -634,7 +634,6 @@ function renderOperatorHome(m){
       </div>
     </div>
 
-    <div style="margin-top:14px">${window.MCK_JOB ? MCK_JOB.crewCard(STATE.fieldProject) : ""}</div>
     <h2 class="section-title">Today — ${fmtDate(today)}</h2>
     <div class="grid">${projCard}${quickCards}</div>
 

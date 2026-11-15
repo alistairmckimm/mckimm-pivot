@@ -3879,7 +3879,7 @@ function projectComplianceKeysFor(projectValue){
 }
 function projectComplianceList(projectValue){
   const keys = projectComplianceKeysFor(projectValue);
-  const items = RECURRING_COMPLIANCE.filter(i=>i.scope==="project");
+  const items = RECURRING_COMPLIANCE.filter(i=>i.scope==="project" && (!i.projects || i.projects.includes(projectValue)));
   return (keys ? items.filter(i=>keys.includes(i.key)) : items).map(i=>complianceStatus(i, projectValue));
 }
 function cadenceLabel(days){
@@ -3888,7 +3888,7 @@ function cadenceLabel(days){
   return days+"d";
 }
 function openProjectComplianceEditor(projectValue){
-  const items = RECURRING_COMPLIANCE.filter(i=>i.scope==="project");
+  const items = RECURRING_COMPLIANCE.filter(i=>i.scope==="project" && (!i.projects || i.projects.includes(projectValue)));
   const keys = projectComplianceKeysFor(projectValue);
   const selected = keys || items.map(i=>i.key);
   const body = `

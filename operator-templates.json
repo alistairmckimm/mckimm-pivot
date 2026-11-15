@@ -47,7 +47,12 @@
       "MCK-Safety-TrenchInsp",
       "MCK-Safety-Employ",
       "MCK-Enviro-Monitor",
-      "MCK-NCR"
+      "MCK-NCR",
+      "MCK-Site-Amenities",
+      "MCK-Site-Washout",
+      "MCK-Site-Office",
+      "MCK-Site-Haul",
+      "MCK-Site-Access"
     ],
     "fullAccess": false
   },
@@ -98,7 +103,12 @@
       "MCK-Safety-TrenchInsp",
       "MCK-Safety-Employ",
       "MCK-Enviro-Monitor",
-      "MCK-NCR"
+      "MCK-NCR",
+      "MCK-Site-Amenities",
+      "MCK-Site-Washout",
+      "MCK-Site-Office",
+      "MCK-Site-Haul",
+      "MCK-Site-Access"
     ],
     "fullAccess": false
   }

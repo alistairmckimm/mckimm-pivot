@@ -77,6 +77,7 @@
   D["MCK-Enviro-Monitor"]    = { project: RR, monitor_date:"@today", monitored_by:"@user" };
   D["MCK-Permits-Site"]      = { project: RR, specific_location:"Rockwell Road intersection and driveway, Lot 5 DP1294499", swms_no:"MCK-SWMS-MobilePlant (SWMS #1, rev 3 + Rockwell Road addendum)", issue_date:"@today" };
   D["MCK-Safety-Inspection"] = { project: RR, inspect_date:"@today", inspector:"@user" };
+  ["MCK-Site-Amenities","MCK-Site-Washout","MCK-Site-Office","MCK-Site-Haul","MCK-Site-Access"].forEach(id => { D[id] = { project: RR, check_date:"@today", checked_by:"@user" }; });
   D["MCK-WHS-DiLAP"]         = { project: RR, street_address:"Rockwell Road road reserve adjoining 21 Boundary Street, Berridale (Lot 5 DP1294499)", inspection_date:"@today" };
   D["MCK-Layout"]            = { project: RR, layout_date:"@today", completed_by:"@user", meeting_point_desc:"Emergency meeting point: the site office, with a first aid kit and fire extinguisher. Nearest hospital: Cooma." };
   D["MCK-DAR-002"]           = { project_site: RR, location: RR_ADDR, check_date:"@today",
@@ -156,7 +157,6 @@
 
   window.MCK_PROJ = {
     RR, LOCATE, locateStatus, CREW_DOCS, CREW,
-    get RR_TEMPLATES(){ return Object.keys(D); },
     /* called by createForm(): tokens (e.g. employee/date on SOPs), then project defaults */
     onCreate(form, t){
       if (t.prefillDefaults) Object.keys(t.prefillDefaults).forEach(k => { if (isEmpty(form.data[k])) form.data[k] = resolve(t.prefillDefaults[k]); });
