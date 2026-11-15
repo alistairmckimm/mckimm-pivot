@@ -319,9 +319,9 @@
   const DOCS = [
     { tid:FUEL_ID, title:"SOP — Fuel Handling & Site Refuelling", code:"MCK-SOP-FUEL-01", owner:"Al McKimm", review:"15 November 2027", practical:true, topic:FUEL_TOPIC, kind:"Policy / SOP" },
     { tid:MH_ID, title:"SOP — Manual Handling", code:MH_ID, owner:"Al McKimm", review:"15 November 2027", practical:true, topic:MH_TOPIC, kind:"Policy / SOP", isNew:true },
-    { tid:BIN_ID, title:"SWMS — Hook-lift Bin Lifter (Merrill), Snowy Skips", code:BIN_ID, owner:"Al McKimm", review:"15 November 2027", practical:true, topic:BIN_TOPIC, kind:"SWMS", isNew:true }
+    { tid:BIN_ID, title:"SWMS — Hook-lift Bin Lifter (Merrill), Snowy Skips", code:BIN_ID, owner:"Al McKimm", review:"15 November 2027", practical:true, topic:BIN_TOPIC, kind:"SWMS", isNew:true, when:"before" }
   ];
-  [[FUEL_ID, "SOP — Fuel Handling & Site Refuelling"], [MH_ID, "SOP — Manual Handling"], [BIN_ID, "SWMS — Hook-lift Bin Lifter (Merrill), Snowy Skips"]].forEach(pair => {
+  [[FUEL_ID, "SOP — Fuel Handling & Site Refuelling"], [MH_ID, "SOP — Manual Handling"]].forEach(pair => {
     if (window.MCK_PROJ && MCK_PROJ.CREW_DOCS && !MCK_PROJ.CREW_DOCS.some(x => x[0] === pair[0])) MCK_PROJ.CREW_DOCS.push(pair);
   });
   const projDocs = (window.MCK_PROJ && MCK_PROJ.CREW_DOCS) || [];
@@ -374,7 +374,7 @@
       const t = templateById(d.tid);
       const signed = PEOPLE.filter(p => readState(d, p).st === "ok").length;
       return `<tr><td><strong>${esc(d.title)}</strong>${d.isNew ? ` <span class="pill">new</span>` : ""}<div style="font-size:12px;color:${MUTED}">${esc(d.kind)} · ${esc(d.code)} · ${esc((t && t.version) || "")}${d.owner ? " · owner " + esc(d.owner) : ""}</div></td>
-        <td>${d.review ? esc(d.review) : "—"}</td><td>${signed} of ${PEOPLE.length}</td>
+        <td>${d.review ? esc(d.review) : "—"}</td><td>${signed} of ${PEOPLE.length}${d.when === "before" ? `<div style="font-size:12px;color:${MUTED}">before first doing the task</div>` : ""}</td>
         <td style="text-align:right"><button class="btn sm" onclick="MCKT.open('${esc(d.tid)}')">Read &amp; sign</button></td></tr>`;
     }).join("");
     return `<div class="card" style="margin-bottom:14px;padding:14px 16px"><h3 style="margin:0 0 8px;font-size:16px">Policies &amp; SOPs</h3>
@@ -390,11 +390,13 @@
         let h = "";
         if (r.st === "ok") h += line(OKC, `✓ Read &amp; signed ${esc(niceDate(r.date))} (${esc(r.ver)})`);
         else if (r.st === "old") h += line(WARNC, `Signed ${esc(r.ver)} — new version, sign again`);
+        else if (d.when === "before") h += line(MUTED, "Sign before first doing this task");
         else h += line(BADC, "Not signed");
         if (d.practical){
           const q = practState(d, p);
           if (q.st === "ok") h += line(OKC, `✓ Practical ${esc(niceDate(q.date))}`);
           else if (q.st === "more") h += line(WARNC, `Needs more practice (${esc(niceDate(q.date))}) <a href="#" onclick="MCKT.signOff('${esc(p)}','${esc(d.topic)}');return false">record again</a>`);
+          else if (d.when === "before" && r.st === "none") h += line(MUTED, `Practical before first use <a href="#" onclick="MCKT.signOff('${esc(p)}','${esc(d.topic)}');return false">sign off</a>`);
           else h += line(BADC, `No practical yet <a href="#" onclick="MCKT.signOff('${esc(p)}','${esc(d.topic)}');return false">sign off</a>`);
         }
         return `<td>${h}</td>`;

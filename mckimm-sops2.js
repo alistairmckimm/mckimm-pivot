@@ -25,10 +25,10 @@
 
   function reg(o){
     const topic = o.name + " (" + o.id + ")";
-    const blocks = [N("hdr", "info", "<p><strong>McKimm Civil Pty Ltd" + (o.skips ? " / Snowy Skips" : "") + "</strong> &nbsp;|&nbsp; Doc: <strong>" + o.id + "</strong> &nbsp;|&nbsp; Version 1.0 &nbsp;|&nbsp; Date: 15 Nov 2026 &nbsp;|&nbsp; Owner: Al McKimm (Site Supervisor)<br>Applies to: " + o.applies + "</p>")];
+    const blocks = [N("hdr", "info", "<p><strong>McKimm Civil Pty Ltd" + (o.skips ? " / Snowy Skips" : "") + "</strong> &nbsp;|&nbsp; Doc: <strong>" + o.id + "</strong> &nbsp;|&nbsp; Version " + (o.version || "1.0") + " &nbsp;|&nbsp; Date: 15 Nov 2026 &nbsp;|&nbsp; Owner: Al McKimm (Site Supervisor)<br>Applies to: " + o.applies + "</p>")];
     o.sections.forEach((s, i) => blocks.push(N("s" + (i + 1), s[0], "<h4>" + (i + 1) + ". " + s[1] + "</h4>" + body(s[2]))));
-    blocks.push(N("sign", "info", "<h4>" + (o.sections.length + 1) + ". Training and sign-off</h4><ul><li>All workers must read this SOP and be shown the task by the supervisor <strong>before doing it unsupervised</strong>.</li><li>Workers sign in McKimm Field to confirm they have read and understood it.</li><li>The supervisor records the practical on the <strong>Training Record &amp; Practical Sign-off</strong> form" + (o.comp ? " and, for this task, on the <strong>Competency Sign-off</strong> form" : "") + ".</li><li>Review: annually, after any incident or near miss, or when the work or equipment changes. Review due " + REVIEW + ".</li></ul>"));
-    const t = sopTemplate({ id:o.id, code:o.id, name:"SOP - " + o.name, version:"v1.0", icon:o.icon, category:"Policies", title:"Standard Operating Procedure — " + o.name, blocks, ackTail:o.ack });
+    blocks.push(N("sign", "info", "<h4>" + (o.sections.length + 1) + ". Training and sign-off</h4><ul>" + (o.everyone ? "<li><strong>Every worker reads and signs this SOP at induction.</strong></li>" : "<li>You do not need to sign this SOP straight away. <strong>Read and sign it, and be shown the task by the supervisor, before you do this task for the first time.</strong></li>") + "<li>Workers sign in McKimm Field to confirm they have read and understood it.</li><li>The supervisor records the practical on the <strong>Training Record &amp; Practical Sign-off</strong> form" + (o.comp ? " and, for this task, on the <strong>Competency Sign-off</strong> form" : "") + ".</li><li>Review: annually, after any incident or near miss, or when the work or equipment changes. Review due " + REVIEW + ".</li></ul>"));
+    const t = sopTemplate({ id:o.id, code:o.id, name:"SOP - " + o.name, version:"v" + (o.version || "1.0"), icon:o.icon, category:"Policies", title:"Standard Operating Procedure — " + o.name, blocks, ackTail:o.ack });
     const i = TEMPLATES.findIndex(x => x.id === t.id);
     if (i > -1) TEMPLATES[i] = t; else TEMPLATES.push(t);
 
@@ -44,13 +44,13 @@
 
     // library + crew phones
     const label = "SOP — " + o.name;
-    if (!T.DOCS.some(d => d.tid === o.id)) T.DOCS.push({ tid:o.id, title:label, code:o.id, owner:"Al McKimm", review:REVIEW, practical:true, topic, kind:"Policy / SOP", isNew:true, group:o.group || "" });
-    if (window.MCK_PROJ && MCK_PROJ.CREW_DOCS && !MCK_PROJ.CREW_DOCS.some(x => x[0] === o.id)) MCK_PROJ.CREW_DOCS.push([o.id, label]);
-    if (o.comp && T.COMP_TASKS.indexOf(o.comp) < 0) T.COMP_TASKS.splice(T.COMP_TASKS.length - 1, 0, o.comp);
+    if (!T.DOCS.some(d => d.tid === o.id)) T.DOCS.push({ tid:o.id, title:label, code:o.id, owner:"Al McKimm", review:REVIEW, practical:true, topic, kind:"Policy / SOP", isNew:true, group:o.group || "", when:o.everyone ? "now" : "before" });
+    if (o.everyone && window.MCK_PROJ && MCK_PROJ.CREW_DOCS && !MCK_PROJ.CREW_DOCS.some(x => x[0] === o.id)) MCK_PROJ.CREW_DOCS.push([o.id, label]);
+    (o.comps || (o.comp ? [o.comp] : [])).forEach(c => { if (T.COMP_TASKS.indexOf(c) < 0) T.COMP_TASKS.splice(T.COMP_TASKS.length - 1, 0, c); });
   }
 
   /* ============================ 1. TRAFFIC ============================ */
-  reg({ id:"MCK-SOP-TRAFFIC-01", key:"traffic", icon:"🚧", name:"Working Near Traffic & Plant/Pedestrian Interface", short:"working near traffic",
+  reg({ id:"MCK-SOP-TRAFFIC-01", everyone:true, key:"traffic", icon:"🚧", name:"Working Near Traffic & Plant/Pedestrian Interface", short:"working near traffic",
     applies:"everyone working beside or entering a road, and everyone working around moving plant and trucks, on site, in the depot and at Snowy Skips jobs.",
     ack:" I understand that I must not direct or stop traffic, and that I must never approach moving plant until the operator has agreed.",
     checks:["Can say who may set up, change or remove traffic control devices, and that nobody directs or stops traffic without a current ticket",
@@ -98,7 +98,7 @@
     ] });
 
   /* ============================ 2. INCIDENT ============================ */
-  reg({ id:"MCK-SOP-INCIDENT-01", key:"incident", icon:"🚑", name:"Incident, Injury & Near-Miss Reporting and Emergency Response", short:"incident reporting and emergency response",
+  reg({ id:"MCK-SOP-INCIDENT-01", everyone:true, key:"incident", icon:"🚑", name:"Incident, Injury & Near-Miss Reporting and Emergency Response", short:"incident reporting and emergency response",
     applies:"everyone: employees, casuals, subcontractors and visitors, on every site, in the depot and in the trucks.",
     ack:" I understand I must report every injury, near miss and hazard, and that I can ring 000 and the Supervisor at any time.",
     checks:["Can say the first steps: stop work and make safe, help anyone hurt, ring 000 for anything serious, then ring Al",
@@ -129,7 +129,7 @@
     ] });
 
   /* ============================ 3. INDUCTION ============================ */
-  reg({ id:"MCK-SOP-INDUCT-01", key:"induct", icon:"🆕", name:"New Starter Induction & Supervision of Casual and Inexperienced Workers", short:"new starter induction",
+  reg({ id:"MCK-SOP-INDUCT-01", everyone:true, key:"induct", icon:"🆕", name:"New Starter Induction & Supervision of Casual and Inexperienced Workers", short:"new starter induction",
     applies:"every new employee, casual, labour-hire worker, apprentice or trainee, and the supervisors who look after them.",
     ack:" I understand I must not operate plant or do high-risk tasks until the Supervisor has signed me off, and that I work with an experienced person until then.",
     checks:["Has been shown the emergency arrangements: meeting point, first aid kit, extinguisher, phone coverage, who to call",
@@ -185,61 +185,147 @@
       ["info","Health","Tell the Supervisor if you have a cough, breathlessness or chest problems. If the risk assessment says you are regularly exposed, the Supervisor arranges <strong>health monitoring</strong> (lung function and chest checks). See the Chemicals SOP for the register."]
     ] });
 
-  /* ============================ 5. CHIPPER ============================ */
-  reg({ id:"MCK-SOP-CHIPPER-01", key:"chipper", icon:"🪵", name:"Wood Chipper (Vermeer BC1000XL)", short:"wood chipper",
-    applies:"anyone who operates, feeds, tows, services or works near the wood chipper.",
+  /* ============================ 5. CHIPPER (v2.0, 15 Nov 2026) ============================ */
+  reg({ id:"MCK-SOP-CHIPPER-01", key:"chipper", icon:"🪵", name:"Wood Chipper (Vermeer BC1000XL)", short:"wood chipper", version:"2.0",
+    applies:"anyone who operates, feeds, tows, services or works near the Vermeer BC1000XL wood chipper.",
     ack:" I understand the chipper can kill, that I must never reach into the feed, and that I do not operate it until the Supervisor has signed me off.",
     comp:"Vermeer chipper (BC1000XL)",
-    checks:["Wears the PPE: helmet with face screen, hearing protection, close-fitting clothing with no loose cuffs or jewellery",
-      "Did the pre-start: guards, feed table, stop and reverse controls tested, discharge chute, knives and fluids; set up on level ground",
-      "Set the discharge away from people, roads and buildings and set an exclusion zone; is not working alone",
-      "Feeds butt-first, stands to the side, never reaches into the hopper, and lets go as soon as the rollers take the branch",
-      "Stops the machine, switches off and removes the key before clearing a jam or changing knives",
-      "Knows what to do if someone is being pulled in: hit the stop or reverse control at once, then ring 000"],
+    checks:["Completes the prestart in McKimm Field, including testing the emergency stop and the lower feed stop bar",
+      "Wears the PPE: helmet with face shield or glasses, hearing protection, close-fitting gloves with tight cuffs (no gauntlets), boots, hi-vis, no loose clothing",
+      "Sets up on firm level ground, marks a 15 m exclusion zone and points the discharge chute away from people, roads and windows",
+      "Starts up in the right order: lever on Disengaged/Low RPM and feed bar on Stop, glow plug, 3 to 5 minutes warm-up, then engages the drum slowly",
+      "Feeds from the side, butt end first, lets go as soon as the rollers take it, and pushes short material with a wooden stick of at least 1.5 m",
+      "Uses Reverse to back out a feed blockage, and knows when a full shutdown is needed instead",
+      "Shows the full shutdown and isolation: feed bar Stop, engine off, key in pocket, tag on, waits for the drum to stop, drum locked before opening the housing",
+      "Hitches up and prepares for towing: feed table folded and latched, chute locked towards the tow vehicle, chains, lights and brakes connected",
+      "Knows what to do if someone is caught: hit the E-stop or lower feed stop bar at once, then ring 000"],
     sections:[
-      ["info","Purpose","The Vermeer BC1000XL pulls in timber with feed rollers and cuts it with a rotating drum. <strong>People have been killed by being pulled into chippers.</strong> This SOP sets the rules for its use."],
-      ["danger","Who may use it",{ l:["Only a worker who has read the <strong>Vermeer operator's manual</strong>, has read this SOP and has been signed off on the <strong>Competency Sign-off</strong> form.","Trainees use it only with a signed-off operator standing next to them.","<strong>Never operate it alone.</strong> A second person stays within sight of the operator, knows where the emergency stop is and can call for help."] }],
-      ["warning","PPE and clothing",["Helmet with a face screen or glasses and visor, <strong>hearing protection</strong>, gloves that fit closely, safety boots, long-sleeved close-fitting clothing.","<strong>No loose clothing, loose cuffs, drawstrings, scarves, jewellery or dangling items.</strong> Tie up long hair.","P2 dust mask for dusty or mouldy material."]],
-      ["warning","Pre-start and set-up",{ o:[
-        "Park on <strong>level, firm ground</strong> with the park brake on and the wheels chocked if needed.",
-        "Check <strong>all guards</strong> are in place. Test the <strong>emergency stop and the feed stop and reverse control</strong>. Check the feed table and hopper, belts, discharge chute and its guard, knives and anvil (sharp, secure and not cracked), fluids and leaks, and fire extinguisher.",
-        "Turn the <strong>discharge away</strong> from people, roads, vehicles, buildings and power lines.",
-        "Set an <strong>exclusion zone</strong> (at least 10 m, wider on the discharge side) with cones or tape. Keep bystanders and pets out.",
-        "Clear the area around the machine of trip hazards. Stack the material so it can be fed easily."] }],
-      ["danger","Feeding the chipper",{ l:["<strong>Feed butt end first.</strong> Stand to the <strong>side</strong>, never directly in line with the feed. Keep the feed table clear.","<strong>Never reach over or into the hopper, and never put your hands or feet past the feed table.</strong> Push short pieces with the next branch or a push stick, never by hand.","<strong>Let go the moment the rollers take the branch.</strong> Do not hold on. Branches can whip and pull you in.","Feed one branch at a time and do not overfill. Do not force material in.","Check for <strong>wire, nails, stones, metal or soil</strong> before feeding. They damage the knives and throw out pieces.","Stop the feed (reverse control) if anything looks wrong."] }],
-      ["danger","Jams, adjustments and knives",["<strong>Never clear a jam, adjust or change knives with the engine running.</strong>","Stop the feed, switch off the engine, <strong>remove the key</strong>, wait until the drum has stopped, and lock out if the manual says so. Then use a tool or a stick, not your hands.","Knife changes and servicing are done as the manual says, with the right tools and gloves. Any safety defect is repaired by a qualified mechanic."]],
-      ["warning","Other hazards",["<strong>Noise and dust:</strong> hearing protection at all times. Dust mask when needed.","<strong>Thrown material:</strong> keep clear of the discharge. Keep the screen down.","<strong>Fire:</strong> the engine and chips are hot. Refuel only when cool (see the Fuel SOP). Keep chips away from ignition and do not burn them.","<strong>Weeds and biosecurity:</strong> do not chip noxious weeds or plant matter from a restricted area. Clean the machine before moving it between properties (see the Erosion, Sediment and Washdown SOP).","<strong>Power lines:</strong> we do not cut or drop trees near power lines. Call Essential Energy or a qualified arborist.","<strong>Towing and moving:</strong> lock the discharge chute and hopper, check the hitch, safety chain, tyres and lights. See the Trucks SOP."]],
-      ["danger","Emergency",["<strong>If a person is caught or being pulled in: hit the emergency stop or reverse control at once</strong>, call 000, then Al. Do not try to pull the person free while the rollers are turning.","Any entanglement, near miss or injury is reported the same day. A serious injury is notifiable to SafeWork NSW (see the Incident SOP)."]]
+      ["info","Purpose","The Vermeer BC1000XL pulls in timber with hydraulic feed rollers and cuts it with a drum fitted with knives. <strong>People have been killed by being pulled into chippers, and by material thrown out of them.</strong> This SOP follows the Vermeer operator&rsquo;s manual and the SafeWork NSW woodchipper guide. Where the manual is stricter, the manual wins."],
+      ["danger","When you must sign, and who may operate",{ l:[
+        "You do not have to sign this SOP straight away. You must <strong>read and sign it, and be signed off by the Supervisor in a practical, before you first operate, feed, service or tow the chipper.</strong> Sign again when the SOP is revised, or if you have not used the chipper for 12 months.",
+        "Only a worker signed off on the <strong>Competency Sign-off</strong> form operates it. A trainee works only with a signed-off operator beside them.",
+        "<strong>Two people minimum, never alone.</strong> One feeds; the other stays within reach of the stop controls and watches the exclusion zone.",
+        "<strong>Never leave the chipper running unattended.</strong>",
+        "Not fit for work (tired, unwell, alcohol or drugs) = do not operate (see the Fitness for Work SOP)."] }],
+      ["warning","PPE and clothing",["Helmet with a face shield or safety glasses, and <strong>hearing protection</strong>.","<strong>Snug-fitting gloves with tight cuffs. No gauntlet-style gloves</strong>, they can catch on a branch and pull your hand in.","Steel-cap boots and hi-vis clothing.","<strong>No loose clothing, drawstrings, scarves, jewellery or loose long hair.</strong>","P2 dust mask for dusty or mouldy material."]],
+      ["warning","Pre-start checks (record on the chipper prestart in McKimm Field before every use)",{ l:[
+        "All guards, belt covers and the cutter housing cover in place and latched.",
+        "Hopper and feed table clear of tools, rocks and rubbish.",
+        "<strong>Emergency stop tested:</strong> the feed rollers stop when the E-stop and the lower feed stop bar are used.",
+        "Upper feed control bar works in Forward, Stop and Reverse; the labels can be read.",
+        "Knives and anvil (bed knife) checked: no chips, cracks or loose bolts.",
+        "Discharge chute secure, retainer bolts tight, chute locks in position.",
+        "Wheel nuts tight; tyres and wheels free of cracks and correctly inflated.",
+        "Engine oil, coolant, hydraulic oil and fuel levels; no leaks; hydraulic hoses undamaged. <strong>Never feel for a hydraulic leak with your hand.</strong>",
+        "Engine bay, battery and fuel tank clear of chips and debris (fire risk). Fire extinguisher on hand.",
+        "Safety decals present and readable."],
+        a:"<strong>Any fail: tag the chipper out of service, record it on the prestart, tell the Supervisor.</strong> Safety defects are repaired by a qualified mechanic and recorded in the Asset Register. <strong>Recall check:</strong> Vermeer has issued recalls on some BC1000XL units (wheel nuts and wheels; discharge chute retainer blocks). The Supervisor confirms with the Vermeer dealer, using the serial number, that any recall kit has been fitted." }],
+      ["warning","Setting up the work zone",{ o:[
+        "Firm, level ground clear of obstacles. <strong>Never set up under a tree that is being cut.</strong>",
+        "Chock the wheels; lower and lock the rear stabiliser if unhitched.",
+        "Mark an <strong>exclusion zone of at least 15 m</strong> around the chipper with cones or tape. <strong>Stop feeding if anyone enters it.</strong>",
+        "Point the discharge chute away from people, roads, vehicles, buildings and windows, ideally into the truck or a clear area. Chips leave fast enough to break a window.",
+        "On or beside a road: traffic control to the Traffic SOP and the approved TGS.",
+        "Outdoors only. Exhaust fumes can kill."] }],
+      ["info","Starting up",{ o:[
+        "Set the cutter engage/throttle lever to <strong>Disengaged/Low RPM</strong> and the feed bar to <strong>Stop</strong>.",
+        "Turn the key to On and wait for the wait-to-start (glow plug) light to go out, then start the engine.",
+        "<strong>Warm up for 3 to 5 minutes</strong> before engaging the drum.",
+        "Move the lever <strong>slowly</strong> to Engaged/High RPM, then move the feed bar to Forward."] }],
+      ["danger","Feeding the chipper",{ l:[
+        "<strong>Stand to the side of the feed table, never straight behind it. Never climb on the feed table.</strong>",
+        "<strong>Feed the butt (thick) end first.</strong> Let go the moment the rollers take the branch and turn away. Branches whip and can drag you in.",
+        "Push short material with a <strong>wooden stick at least 1.5 m long</strong>, or the next branch. <strong>Never hands, feet, rakes or shovels.</strong>",
+        "<strong>Never reach past the edge of the feed table or into the hopper.</strong>",
+        "Branches, limbs and brush only. <strong>No wire, nails, metal, rocks, or wood with dirt or sand on it.</strong> They wreck the knives and get thrown out.",
+        "Keep the feed table up during operation (at least 600 mm off the ground).",
+        "SmartFeed will stop and reverse the rollers when the engine is labouring. Let it recover; do not force material in."] }],
+      ["danger","Blockages and stalls",{ o:[
+        "Feed bar to <strong>Reverse</strong> to back the material out. Trim it and feed again.",
+        "If reversing does not clear it, or the drum or discharge chute is blocked: <strong>full shutdown and isolation</strong> (next section) before you clear it.",
+        "After a stall: feed bar to Stop, throttle to Low RPM, restart, set High RPM, reverse the material out, then re-engage and feed again.",
+        "<strong>Never put hands or tools into the hopper, drum or chute while the engine is running or the drum is turning.</strong>"] }],
+      ["danger","Shutdown and isolation",{ p:"Do this before clearing a blockage, refuelling, cleaning, any maintenance, or towing.", o:[
+        "Feed bar to Stop; lever to Disengaged/Low RPM.",
+        "Engine off. <strong>Remove the key and keep it in your pocket.</strong> Hang a &ldquo;Do not operate&rdquo; tag on the controls.",
+        "<strong>Wait for the drum to stop completely.</strong> It keeps spinning after the engine stops. Check the drum bearing to confirm it has stopped.",
+        "<strong>Lock the drum</strong> against turning before opening the cutter housing or touching the knives.",
+        "Only the person holding the key restarts the chipper, and only once all guards are back on."] }],
+      ["warning","Knives and maintenance",["Inspect the knives and the anvil daily. Rotate, sharpen or replace them to the Vermeer operator&rsquo;s manual.","Replace knife bolts and torque them to the value in the operator&rsquo;s manual. Never reuse damaged bolts.","Chipped or cracked knives usually mean foreign material went through. Find out why.","Only a competent person does knife work, with the drum locked. Record all servicing and repairs in the Maintenance Record against the chipper in the Asset Register.","Refuel only with the engine off and cool (see the Fuel SOP)."]],
+      ["warning","Towing and transport",["Shut down and wait for the drum to stop before hitching or moving.","Tow vehicle and hitch rated for the chipper (about 2,100 kg). Safety chains, lights and brake controller connected and tested.","Fold and latch the feed table. Lock the discharge chute facing the tow vehicle. Stow the jack.","Check wheel nuts before each trip, and re-torque after any wheel change as set out in Vermeer&rsquo;s wheel and tyre manual.","Unhitching: level ground, chock both wheels front and rear, lower and lock the rear stabiliser, check the chipper sits level.","Clean soil and plant material off the chipper before moving between properties (see the Erosion, Sediment and Washdown SOP). Follow the Trucks &amp; Towing SOP."]],
+      ["warning","Other hazards",["<strong>Noise and dust:</strong> hearing protection at all times; dust mask when needed.","<strong>Fire:</strong> the engine and chips get hot. Keep chips away from ignition and do not burn them.","<strong>Weeds:</strong> do not chip noxious weeds or plant matter from a restricted area.","<strong>Power lines:</strong> we do not cut or drop trees near power lines. Call Essential Energy or a qualified arborist."]],
+      ["danger","Emergency",["<strong>If a person is caught or being pulled in: hit the E-stop or the lower feed stop bar at once</strong>, call 000, then Al. Do not try to pull them free while the rollers are turning.","Any entanglement, near miss or injury is reported the same day. A serious injury is notifiable to SafeWork NSW (see the Incident SOP)."]]
     ] });
 
-  /* ============================ 6. CHAINSAW ============================ */
-  reg({ id:"MCK-SOP-SAW-01", key:"saw", icon:"🪚", name:"Chainsaw & Pole Saw Use", short:"chainsaw use",
-    applies:"anyone who uses, carries, maintains or works near a chainsaw or pole saw (Husqvarna, Stihl and others in the depot).",
-    ack:" I understand I only use a chainsaw if the Supervisor has signed me off, I do not fell large trees or work near power lines, and I wear the full protective gear.",
+  /* ============================ 6. CHAINSAW (v2.0, 15 Nov 2026) ============================ */
+  reg({ id:"MCK-SOP-SAW-01", key:"saw", icon:"🪚", name:"Chainsaw Operation, Crosscutting & Tree Felling", short:"chainsaw operation", version:"2.0",
+    applies:"anyone who uses, carries, maintains or works near a chainsaw or pole saw, and anyone who crosscuts or fells trees for McKimm Civil or Snowy Skips.",
+    ack:" I understand I only do the chainsaw work my ticket and my Supervisor sign-off cover, that I never fell near power lines or fell hazardous trees, and that I wear the full chainsaw PPE.",
     comp:"Chainsaw use",
-    checks:["Wears chainsaw trousers or chaps, helmet with visor and ear muffs, cut-resistant boots and gloves",
-      "Checked the saw: chain brake, chain tension and sharpness, guards, throttle lock, bar oil, handles, and fuel mix",
-      "Knows the limits: does not fell large trees, work near power lines, cut above shoulder height or work from a ladder",
-      "Starts and carries the saw correctly: on the ground, brake on, bar pointing back",
-      "Sets a clear escape route and exclusion zone, and looks up for hung branches before cutting",
-      "Refuels the right way: engine off and cool, on the ground, and restarts 3 m or more away"],
+    comps:["Chainsaw use","Chainsaw – crosscut and trim felled trees","Chainsaw – fell trees (basic)","Chainsaw – fell trees (intermediate)"],
+    checks:["Can say which chainsaw work their own ticket and sign-off allow, and which trees they must walk away from",
+      "Wears the full PPE: chainsaw trousers or chaps, cut-resistant boots, helmet with mesh visor and ear muffs, gloves, hi-vis; trauma dressing on hand",
+      "Does the saw pre-start: chain brake, chain catcher, throttle lock, stop switch, chain sharp and tensioned, bar and oiler, muffler and spark arrestor, fuel mix",
+      "Starts the saw on the ground with the chain brake on, at least 3 m from where it was fuelled",
+      "Holds the saw with both hands and thumbs wrapped, keeps the bar tip clear (kickback), cuts below shoulder height, applies the brake before moving",
+      "Crosscutting: reads tension and compression, cuts the compression side first, stands uphill and clear of rolling logs",
+      "Felling (if ticketed): assesses the tree, sets 2 tree-length exclusion zone, clears two escape routes, cuts a correct scarf, back cut and hinge, uses wedges",
+      "Knows what to do with a hung-up tree: stop, mark the area, never climb it or fell another tree onto it, and call the Supervisor",
+      "Knows the emergency plan: stop the bleeding with direct pressure or a tourniquet, call 000 with the site location, then Al"],
     sections:[
-      ["info","Purpose","A chainsaw can cause deep cuts in a split second, and a falling tree or branch can kill. This SOP covers the chainsaws and pole saws we own, and sets the limits on what we do with them."],
-      ["danger","Who may use one and the limits",{ l:[
-        "Only a worker who has been <strong>signed off on the Competency Sign-off form</strong>, with a recognised chainsaw course or proven experience recorded by the Supervisor.",
-        "<strong>We cut up fallen timber and fell only small trees</strong> that can be cut with a single cut and dropped into a clear area at least twice the tree's height.",
-        "<strong>We do not:</strong> fell large trees; fell near buildings, roads, fences or <strong>power lines</strong>; cut hung-up or spring-loaded trees; climb trees; or cut from a ladder, a vehicle or a platform. Call a qualified arborist or the Supervisor.",
-        "<strong>Power lines:</strong> assume every line is live. Keep to the distances in the Electric Lines SOP. A pole saw is a long conductive tool, so <strong>count its full reach</strong>. If lines are close, do not use it.",
-        "Never use a chainsaw alone (see the Working Alone SOP). Another person stays within contact."] }],
-      ["warning","PPE",["<strong>Chainsaw trousers or chaps</strong>, a <strong>helmet with mesh visor and ear muffs</strong>, cut-resistant safety boots, close-fitting gloves, hi-vis.","No loose clothing or jewellery. Tie back long hair.","First aid kit with a trauma dressing nearby."]],
-      ["warning","Before you start",{ o:[
-        "<strong>Check the saw:</strong> chain brake works, chain is sharp and at the right tension, chain catcher, guards and handles secure, throttle lock works, bar and chain oil full, no fuel leaks, muffler and spark guard fitted.",
-        "Check the correct 2-stroke fuel mix. Safety checks on every chainsaw are done every 6 months (12 months if unused) and recorded in the Asset Register.",
-        "Look at the job: the lean of the tree, hung-up branches (&ldquo;widow-makers&rdquo;), dead branches, wind, tension in logs, slopes and the ground you will stand on.",
-        "Clear the area, set an <strong>exclusion zone</strong> (at least 2 x the tree height for felling, 5 m for cutting) and plan <strong>two escape routes</strong> at about 45 degrees behind you."] }],
-      ["danger","Using the saw",["<strong>Start it on the ground</strong> with the chain brake on, never held in the air or between your legs. Keep a firm stance.","Hold it with <strong>both hands</strong>, thumb wrapped around the handle. Keep the bar close to your body and below shoulder height. <strong>Never cut above shoulder height.</strong>","Do not let the tip of the bar touch anything. That is where <strong>kickback</strong> comes from. Cut at full throttle.","Release the trigger and apply the chain brake before you move your feet. <strong>Carry it with the engine off, or with the chain brake on and the bar pointing backward.</strong>","In logs under tension, cut on the compression side first. Do not cut through logs on a slope that could roll.","Stop if you are tired. Take breaks to reduce vibration and fatigue."]],
-      ["warning","Refuelling and care",["Refuel on the ground, <strong>engine off and cool</strong>, away from ignition. Restart at least <strong>3 m</strong> from where you fuelled. Petrol is never carried in the cab (see the Fuel SOP).","Clean the saw and store it with the bar cover on. Report any fault or damage and do not use it until it is fixed. Safety defects are repaired by a qualified person."]],
-      ["info","Injury and emergency","Severe bleeding: direct pressure, call 000, then Al. A cut, near miss or kickback is reported the same day. A serious injury is notifiable (see the Incident SOP)."]
+      ["info","Purpose","Chainsaws cut flesh in a split second, and falling trees and limbs kill people every year. This SOP sets how McKimm Civil and Snowy Skips use chainsaws and pole saws, crosscut timber and fell trees. It follows Safe Work Australia&rsquo;s forestry guide, the national chainsaw units of competency and the saw makers&rsquo; manuals (Husqvarna and Stihl)."],
+      ["danger","When you must sign",{ l:[
+        "You do not have to sign this SOP straight away. You must <strong>read and sign it, and be signed off by the Supervisor in a practical, before you first use a chainsaw for McKimm Civil.</strong>",
+        "Sign again when the SOP is revised, or if you have not used a chainsaw for 12 months.",
+        "A copy of your ticket(s) goes in the licences and tickets register before you start."] }],
+      ["danger","Who may do what (tickets and limits)",{ p:"Do only the work your ticket covers <strong>and</strong> the Supervisor has signed you off for on the Competency Sign-off form. Ticket codes change between training package releases; a current or superseded version of the same unit is accepted.", l:[
+        "<strong>Any chainsaw use or maintenance:</strong> <em>Maintain chainsaws</em> (for example FWPCOT2254) or proven experience recorded by the Supervisor.",
+        "<strong>Crosscutting, limbing and trimming felled timber:</strong> <em>Trim and cut felled trees</em> (for example FWPCOT2273, earlier FWPCOT2256 or FWPCOT2239).",
+        "<strong>Basic felling:</strong> <em>Fell trees manually (basic)</em> (for example FWPCOT2253). Basic trees only: about 15 m tall or less, <strong>trunk diameter smaller than the bar length</strong>, single stem, no excessive lean and no visible defects, on an uncomplicated site.",
+        "<strong>Intermediate felling:</strong> <em>Fell trees manually (intermediate)</em> (for example FWPFGM3216). Trees wider than the bar, with lean that can be controlled with wedges, and only limited visible defects.",
+        "<strong>We do not fell:</strong> hazardous trees (dead, burnt, hollow or rotten trunks, splits, heavy dead limbs, hung-up limbs, interlocked crowns, severe lean); trees within 2 tree lengths of <strong>power lines</strong>, buildings, roads or fences unless the Supervisor has planned it and the road is controlled; or anything beyond the operator&rsquo;s skill. Call a qualified arborist or advanced faller.",
+        "<strong>Never:</strong> climb trees with a saw, cut from a ladder, vehicle bucket or platform, cut above shoulder height, or use a chainsaw alone (see the Working Alone SOP)."] }],
+      ["warning","PPE (all chainsaw work)",["<strong>Chainsaw trousers or chaps</strong> (cut-resistant, to AS/NZS 4453), <strong>cut-resistant safety boots</strong> with steel caps.","<strong>Helmet with a mesh visor and ear muffs</strong>; safety glasses under the visor when cutting dry or dusty timber.","Close-fitting gloves (cut-resistant on the left hand preferred), hi-vis shirt or vest.","No loose clothing or jewellery. Tie back long hair.","On site: first aid kit with a <strong>trauma dressing and tourniquet</strong>, and a phone or radio that works at that site.","For felling, also carry felling wedges, a hammer or axe, and a whistle or radio."]],
+      ["warning","Saw pre-start (every day the saw is used)",{ l:[
+        "<strong>Chain brake</strong> engages and releases; test it at idle with the saw on the ground.",
+        "<strong>Chain catcher</strong>, front and rear hand guards, and handles secure and undamaged.",
+        "<strong>Throttle lockout</strong> and <strong>stop switch</strong> work; chain does not move at idle.",
+        "Chain <strong>sharp</strong>, correct tension (snug on the bar but pulls round by hand with gloves on), depth gauges correct; bar not worn or bent; sprocket in good order.",
+        "Bar and chain oiler working (oil flicks off the tip onto a light surface at revs). Bar oil and fuel topped up.",
+        "<strong>Correct 2-stroke mix</strong> for that saw (see the maker&rsquo;s manual); fuel in a marked container.",
+        "Muffler and spark arrestor fitted; anti-vibration mounts sound; no fuel leaks.",
+        "Pole saw: shaft, couplings and harness in good order; full reach counted for power line distances."],
+        a:"<strong>Any fault: tag the saw out and tell the Supervisor.</strong> Six-monthly safety checks (12-monthly if unused) are recorded against each saw in the Asset Register." }],
+      ["warning","Starting and carrying the saw",{ o:[
+        "Move <strong>at least 3 m</strong> from where you fuelled.",
+        "Put the saw on firm ground, <strong>chain brake on</strong>, bar clear of anything.",
+        "Right foot in the rear handle, left hand on the front handle, then pull the cord. <strong>No drop-starting</strong> and no starting between your legs.",
+        "Release the brake only when you are ready to cut, with both hands on the saw.",
+        "<strong>Apply the chain brake before you take more than two steps.</strong> Carry the saw with the engine off, or brake on, bar pointing back and muffler away from your body. Bar cover on for transport."] }],
+      ["danger","Safe cutting (all work)",["<strong>Both hands on the saw, thumbs wrapped round the handles.</strong> Keep a firm, balanced stance with clear footing.","<strong>Kickback:</strong> keep the upper quarter of the bar tip from touching anything. Do not bore-cut unless you are trained to. Cut at full throttle.","Keep the saw below shoulder height and the bar close to your body; never over-reach.","Stand to one side of the cutting line, never directly behind the bar.","Keep other workers at least <strong>5 m away</strong> when crosscutting, and at <strong>2 tree lengths</strong> when felling.","Stop and rest when tired. Vibration and fatigue cause mistakes and long-term harm."]],
+      ["danger","Crosscutting, limbing and trimming felled trees",{ l:[
+        "Before each cut, <strong>read the log</strong>: where it is supported, which side is in <strong>compression</strong> (closes up) and which is in <strong>tension</strong> (opens). <strong>Cut the compression side first</strong>, then finish from the tension side so the bar does not get pinched or the log does not split and spring.",
+        "<strong>Stand uphill</strong> of the log and never in its rolling path. Chock logs that could roll. Never stand on a log you are cutting.",
+        "Limbing: work from the uphill side and keep the trunk between you and the saw where you can. Cut tension-loaded limbs in small steps.",
+        "<strong>Spring poles</strong> (saplings or limbs bent under load) can whip with great force. Release them with small shallow cuts on the compression side, only if trained; otherwise leave them for the Supervisor.",
+        "Root plates on wind-thrown trees can stand back up when the trunk is cut free. Plan the cut so you are never between the root plate and the hole, and chock or prop the plate first.",
+        "If the bar gets pinched: stop the engine, do not wrench the saw, use a wedge to open the cut.",
+        "Stack cut timber so it cannot roll onto people, plant or the road."] }],
+      ["danger","Tree felling (ticketed workers only)",{ o:[
+        "<strong>Assess the tree:</strong> height, lean, crown weight, dead or hung-up branches (&ldquo;widow-makers&rdquo;), rot, splits, hollow butt, nearby trees, wind, slope, and what is within <strong>2 tree lengths</strong>. Any hazardous tree, or anything beyond your ticket = stop, do not fell.",
+        "<strong>Wind:</strong> do not fell when the wind moves the crown enough to make the fall direction unpredictable.",
+        "<strong>Exclusion zone:</strong> everyone else at least <strong>2 tree lengths</strong> away. Nobody below the faller on a slope. Control roads and tracks.",
+        "<strong>Escape routes:</strong> clear two routes at about <strong>45 degrees behind the line of fall</strong>, at least <strong>6 m</strong> long, free of undergrowth and trip hazards.",
+        "Clear undergrowth from the base of the tree so you can work and move freely.",
+        "<strong>Scarf:</strong> on the side of the fall, about <strong>one quarter of the trunk diameter</strong> deep, with a top cut at about <strong>45 degrees</strong> meeting a flat bottom cut exactly. No bypass cuts.",
+        "<strong>Back cut:</strong> level, on the opposite side, slightly above the scarf floor (about 10% of the diameter). Leave a <strong>hinge about 10% of the diameter</strong> thick. Never cut through the hinge.",
+        "<strong>Wedge</strong> the back cut as soon as there is room, unless the tree clearly leans the way it is to fall.",
+        "Warn everyone (whistle, radio or shout) before the final cut. As the tree starts to go: brake on, step away along the escape route, and <strong>watch the crown</strong> for falling limbs.",
+        "Wait for the canopy and limbs to settle before going back in. Look up first."] }],
+      ["danger","Hung-up or stuck trees",["<strong>Stop.</strong> Mark the area as a no-go zone of 2 tree lengths, and tell the Supervisor.","<strong>Never</strong> climb a hung-up tree, cut the tree it is resting on, fell another tree onto it, or work or walk under it.","Bring it down only with a planned mechanical method (excavator, winch or tractor with a cable) by a competent operator, from outside the fall zone.","If it cannot be brought down safely, leave it marked and call an arborist or advanced faller."]],
+      ["warning","Pole saw",["Same PPE, pre-start and limits as a chainsaw. Never cut directly above your head; stand to the side of where the limb will fall.","<strong>A pole saw is a long conductive tool.</strong> Count its full reach for power line approach distances (see the Work Near Electric Lines SOP). If lines are anywhere near, do not use it."]],
+      ["warning","Refuelling and maintenance",["Refuel on the ground with the <strong>engine off and cool</strong>, away from ignition; wipe up spills. Restart at least <strong>3 m away</strong>. Petrol is never carried in the cab (see the Fuel SOP).","Sharpen the chain to the maker&rsquo;s file size and angles; check depth gauges. Replace worn chains, bars and sprockets together where the maker says so.","Clean the saw and air filter after use; store with the bar cover on, in a ventilated place away from ignition.","Service and repairs to the maker&rsquo;s manual. Safety defects are repaired by a qualified person and recorded in the Asset Register."]],
+      ["danger","Injury and emergency",["<strong>Severe bleeding:</strong> firm direct pressure with a trauma dressing; tourniquet above the wound for a limb if pressure is not stopping it. Call 000 and give the site address or GPS location, then Al.","Know the nearest access point for an ambulance before work starts, and keep the access track clear.","Any cut, kickback, near miss or tree that falls the wrong way is reported the same day. A serious injury is notifiable to SafeWork NSW (see the Incident SOP)."]]
     ] });
 
   /* ============================ 7. CHEMICALS ============================ */
@@ -296,7 +382,7 @@
     ] });
 
   /* ============================ 9. UNEXPECTED FINDS ============================ */
-  reg({ id:"MCK-SOP-FINDS-01", key:"finds", icon:"⚠️", name:"Unexpected Finds: Asbestos, Contaminated Soil, Heritage & Human Remains", short:"unexpected finds",
+  reg({ id:"MCK-SOP-FINDS-01", everyone:true, key:"finds", icon:"⚠️", name:"Unexpected Finds: Asbestos, Contaminated Soil, Heritage & Human Remains", short:"unexpected finds",
     applies:"everyone digging, demolishing minor structures, handling pipes or fill, or working in the skip business, anywhere we find something we did not expect.",
     ack:" I understand that if I find something suspicious I stop, keep clear, do not touch it, and tell the Supervisor.",
     checks:["Can name the common signs of asbestos (fibro sheeting, asbestos cement pipe, lagging, old vinyl tiles) and says 'stop, keep clear, do not touch'",
@@ -326,7 +412,7 @@
     ] });
 
   /* ============================ 10. FITNESS FOR WORK ============================ */
-  reg({ id:"MCK-SOP-FIT-01", key:"fit", icon:"🧢", name:"Fitness for Work: Fatigue, Alcohol & Drugs, Medication, Heat and Cold", short:"fitness for work",
+  reg({ id:"MCK-SOP-FIT-01", everyone:true, key:"fit", icon:"🧢", name:"Fitness for Work: Fatigue, Alcohol & Drugs, Medication, Heat and Cold", short:"fitness for work",
     applies:"everyone who works for McKimm Civil or Snowy Skips, in the depot, on site and in the vehicles.",
     ack:" I understand I must not work under the influence of alcohol or drugs, that I must tell the Supervisor if I am too tired, sick or on medication that could affect my safety, and that I can ask for help.",
     checks:["Knows the alcohol and drug rule, including the morning after, and that nothing is brought to site or the depot",
@@ -356,7 +442,7 @@
     ] });
 
   /* ============================ 11. PSYCHOSOCIAL ============================ */
-  reg({ id:"MCK-SOP-PSYCH-01", key:"psych", icon:"🤝", name:"Psychosocial Hazards, Bullying, Harassment & Respect at Work", short:"respect at work and psychosocial hazards",
+  reg({ id:"MCK-SOP-PSYCH-01", everyone:true, key:"psych", icon:"🤝", name:"Psychosocial Hazards, Bullying, Harassment & Respect at Work", short:"respect at work and psychosocial hazards",
     applies:"everyone who works for McKimm Civil or Snowy Skips, and anyone we deal with: customers, drivers, subcontractors and the public.",
     ack:" I understand I must treat everyone with respect, that bullying, harassment and discrimination are not tolerated, and that I can raise a concern without being punished.",
     checks:["Can say what bullying and harassment (including sexual harassment) are, and what is not bullying",
@@ -540,7 +626,7 @@
     ] });
 
   /* ============================ 18. WORKING ALONE ============================ */
-  reg({ id:"MCK-SOP-ALONE-01", key:"alone", icon:"📱", name:"Working Alone and Remote Work", short:"working alone and remote work",
+  reg({ id:"MCK-SOP-ALONE-01", everyone:true, key:"alone", icon:"📱", name:"Working Alone and Remote Work", short:"working alone and remote work",
     applies:"anyone who works or drives alone, or too far from help to reach it quickly, including at the depot after hours.",
     ack:" I understand which jobs I must never do alone, and that I must check in and tell the Supervisor where I am going.",
     checks:["Can name the jobs that are never done alone (trench work, chainsaw, chipper, bitumen spraying, lifting, near power lines, confined space, work at heights)",
