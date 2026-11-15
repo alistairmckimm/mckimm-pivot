@@ -464,8 +464,125 @@ function gvApply(){
   f.updatedAt = Date.now(); save(); render();
   toast("Filled in what I could. Check it, then save.");
 }
+
+/* ---------- Talk to fill: Employee Timesheet and Daily Report ----------
+   Same rules as everywhere: only words, times, hours and list choices are filled. Yes/No answers, photos and signatures are never touched. */
+const TW = {one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12};
+function vfTimesParse(raw){
+  let t = " " + String(raw||"").toLowerCase().replace(/[’']/g,"").replace(/[^a-z0-9:. -]+/g," ").replace(/\s+/g," ") + " ";
+  const wn = "(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\\d{1,2})", toN = x => /^\d+$/.test(x) ? +x : TW[x];
+  t = t.replace(new RegExp("half past " + wn + "\\b","g"), (m,h) => " " + toN(h) + ":30 ");
+  t = t.replace(/\ba quarter /g, " quarter ").replace(/\ba half hour\b/g, "half an hour");
+  t = t.replace(new RegExp("quarter past " + wn + "\\b","g"), (m,h) => " " + toN(h) + ":15 ");
+  t = t.replace(new RegExp("quarter to " + wn + "\\b","g"), (m,h) => " " + (((toN(h) + 10) % 12) + 1) + ":45 ");
+  t = t.replace(new RegExp("\\b" + wn + " (?:oclock|o clock)\\b","g"), (m,h) => " " + toN(h) + ":00 ");
+  const MIN = {"fifteen":"15","twenty":"20","twenty five":"25","twenty-five":"25","thirty":"30","forty five":"45","forty-five":"45","ten":"10","five":"05","oh five":"05","oh ten":"10"};
+  t = t.replace(new RegExp("\\b" + wn + " (oh five|oh ten|fifteen|twenty[ -]five|twenty|thirty|forty[ -]five|ten|five)\\b(?! (?:minutes?|mins?|hours?|hrs?|tonnes?)\\b)","g"), (m,h,mm) => " " + toN(h) + ":" + MIN[mm] + " ");
+  t = t.replace(/\b(?:at|from|to|until|till|start(?:ed)?|finish(?:ed)?|lunch) (\d{1,2})(\d{2})\b(?! ?(?:hours?|hrs?|minutes?|mins?|kms?|k))/g, (m,h,mi) => m.replace(h + mi, h + ":" + mi));
+  t = t.replace(/\b(\d{1,2})\.(\d{2})(?=\s|am|pm|,|$)/g, "$1:$2");
+  t = t.replace(/\b(at|from|to|until|till|start(?:ed)?|finish(?:ed)?|lunch|off|home|break) a?\s*(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b(?! (?:minutes?|mins?|hours?|hrs?|tonnes?|metres?|loads?|machines?|trucks?|men|guys))/g, (m,c,w) => c + " " + TW[w]);
+  t = vfNumWords(t.trim());
+  t = " " + t + " ";
+  const T = "(\\d{1,2}(?::\\d{2})?)(?:\\s*(am|pm)\\b)?";
+  const mins = (hs, ap, role) => {
+    let [h, m] = hs.split(":"); h = +h; m = +(m || 0);
+    if (ap === "pm" && h < 12) h += 12; else if (ap === "am" && h === 12) h = 0;
+    else if (!ap){
+      if (role === "start"){ if (h >= 1 && h <= 3) h += 12; }
+      else if (role === "end"){ if (h >= 1 && h <= 9) h += 12; }
+      else { if (h >= 1 && h <= 5) h += 12; }               // lunch: 12 is noon, 1 to 5 is the afternoon
+    }
+    return h * 60 + m;
+  };
+  const hhmm = n => String(Math.floor(n/60) % 24).padStart(2,"0") + ":" + String(n % 60).padStart(2,"0");
+  const r = {};
+  let m = new RegExp("\\b(?:start(?:ed)?|began|begin|clocked? on|clocked in|arrived|got there|on site)\\s+(?:at\\s+|from\\s+)?" + T + "(?:\\s+(?:to|until|till)\\s+" + T + ")?").exec(t);
+  if (m){ r.start = mins(m[1], m[2], "start"); if (m[3]) r.end = mins(m[3], m[4], "end"); }
+  if (r.start == null){ m = new RegExp("\\bfrom\\s+" + T + "\\s+(?:to|until|till)\\s+" + T).exec(t); if (m){ r.start = mins(m[1], m[2], "start"); r.end = mins(m[3], m[4], "end"); } }
+  if (r.end == null){ m = new RegExp("\\b(?:finish(?:ed)?|knock(?:ed)? off|clocked? off|clocked out|off|ended|end|home|left|until|till|done|wrapped up)\\s+(?:at\\s+)?" + T).exec(t); if (m) r.end = mins(m[1], m[2], "end"); }
+  m = new RegExp("\\b(?:lunch|break|smoko)\\s+(?:was\\s+)?(?:at|from)\\s+" + T + "(?:\\s+(?:to|until|till)\\s+" + T + ")?").exec(t);
+  if (m){ r.ls = mins(m[1], m[2], "lunch"); if (m[3]) r.lf = mins(m[3], m[4], "lunch"); }
+  const D = "(half an hour|an hour|\\d+\\s*(?:minutes?|mins?)|\\d+(?:\\.\\d+)? hours?)";
+  const dur = s => /half an hour/.test(s) ? 30 : /an hour/.test(s) ? 60 : /hour/.test(s) ? Math.round(parseFloat(s) * 60) : parseInt(s, 10);
+  m = new RegExp(D + "\\s*(?:for |of |as )?(?:a |my )?(?:lunch|break|smoko)").exec(t) || new RegExp("\\b(?:lunch|break|smoko)\\s+(?:was |of |for )?" + D).exec(t) || new RegExp("\\b(?:lunch|break|smoko)\\b[^.]{0,30}?\\bfor\\s+" + D).exec(t);
+  if (m) r.dur = dur(m[1]);
+  if (r.dur == null && /\b(no|didnt take a?|without|skipped)\s+(?:a\s+)?(?:lunch|break|smoko)\b/.test(t)) r.dur = 0;
+  if (r.end != null && r.start != null && r.end <= r.start) r.end += 12 * 60;
+  if (r.lf != null && r.ls != null && r.lf < r.ls) r.lf += 12 * 60;
+  if (r.ls != null && r.lf == null && r.dur != null) r.lf = r.ls + r.dur;
+  const brk = (r.ls != null && r.lf != null) ? r.lf - r.ls : (r.dur != null ? r.dur : null);
+  const out = {};
+  if (r.start != null) out.start_time = hhmm(r.start);
+  if (r.end != null) out.end_time = hhmm(r.end);
+  if (r.ls != null) out.lunch_start = hhmm(r.ls);
+  if (r.lf != null) out.lunch_finish = hhmm(r.lf);
+  if (brk != null) out.total_break_hours = String(Math.round(brk / 60 * 100) / 100);
+  if (r.start != null && r.end != null && brk != null) out.ordinary_hours = String(Math.round((r.end - r.start - brk) / 60 * 100) / 100);
+  return out;
+}
+function vfSentences(raw){ return String(raw||"").split(/(?<=[.!?])\s+/).map(x => x.trim()).filter(Boolean); }
+function vfPick(raw, re){ return vfSentences(raw).filter(x => re.test(x.toLowerCase())).join(" "); }
+function vfSetNotes(d, id, said){          // put words in a notes box; saying it again replaces what voice put there last time
+  const key = "_vf_" + id; let prev = String(d[id] || "").trim();
+  if (d[key] && prev.includes(d[key])) prev = prev.replace(d[key], "").replace(/\s{2,}/g," ").trim();
+  said = vfCap(said); if (said && !/[.!?]$/.test(said)) said += ".";
+  d[id] = (prev ? prev + " " : "") + said; d[key] = said;
+}
+function vfProjectMatch(text){
+  const t = " " + normTxt(text) + " ", STOP = new Set(["road","street","drive","lane","berridale","jindabyne","cooma","dalgety","other","comments","see","the","and","access","station"]);
+  const scored = (PROJECT_LOCATIONS||[]).map(pn => {
+    const toks = normTxt(pn).split(/[^a-z0-9]+/).filter(k => k.length >= 4 && !STOP.has(k));
+    return { pn, sc: toks.filter(k => t.includes(" " + k + " ") || t.includes(" " + k)).reduce((n,k) => n + k.length, 0) };
+  }).filter(x => x.sc > 0).sort((a,b) => b.sc - a.sc);
+  if (!scored.length || (scored[1] && scored[1].sc === scored[0].sc)) return "";
+  return scored[0].pn;
+}
+function vfApplyTimesheet(raw){
+  const f = CURRENT_FORM, d = f.data, done = [], todo = [];
+  const tm = vfTimesParse(raw);
+  const names = {start_time:"Start time", end_time:"End time", lunch_start:"Lunch start", lunch_finish:"Lunch finish", total_break_hours:"Total break hours", ordinary_hours:"Ordinary hours"};
+  Object.keys(names).forEach(k => { if (tm[k] != null){ d[k] = tm[k]; done.push(names[k] + ": " + esc(tm[k])); } });
+  if (tm.start_time == null) todo.push("No start time heard. Say for example: started at six thirty.");
+  if (tm.end_time == null) todo.push("No finish time heard. Say for example: finished at four thirty.");
+  if (tm.total_break_hours == null) todo.push("No lunch or break heard. Say for example: half an hour for lunch. Then the ordinary hours are worked out for you.");
+  const dt = vfDate(normTxt(raw)); if (dt){ d.ts_date = dt; done.push("Date: " + niceDate(dt)); }
+  vfSetNotes(d, "day_summary", raw); done.push("Your words are in: Overview of what you did today");
+  const proj = vfProjectMatch(raw);
+  if (proj && !(Array.isArray(d.project_breakdown) && d.project_breakdown.length)){
+    d.project_breakdown = [[proj, tm.ordinary_hours || "", vfCap(raw), ""]]; done.push("Project row: " + esc(proj));
+  } else if (!(Array.isArray(d.project_breakdown) && d.project_breakdown.length)) todo.push("Add your project row (project, hours, summary) under Work Task Recording.");
+  todo.push("Your two self photos, the fatigue check and your signature are always done by you.");
+  VF.result = { done, todo }; f.updatedAt = Date.now(); save(); render();
+  toast("Filled in. Check the times and hours, then save.");
+}
+function vfApplyDaily(raw){
+  const f = CURRENT_FORM, d = f.data, done = [], todo = [], low = raw.toLowerCase();
+  const dt = vfDate(normTxt(raw)); if (dt){ d.report_date = dt; done.push("Date: " + niceDate(dt)); }
+  const proj = vfProjectMatch(raw);
+  if (proj){ d.project_location = proj; done.push("Project: " + esc(proj)); } else if (!d.project_location) todo.push("No project heard. Pick it from the list.");
+  const W = [["Fine",/\b(fine|sunny|clear|nice day|good weather|dry)\b/],["Overcast",/\b(overcast|cloudy|grey)\b/],["Rain",/\b(rain|raining|rained|showers?|wet|drizzle)\b/],["Wind",/\b(wind|windy|gusty|gusts)\b/],["Heat",/\b(heat|hot|scorcher)\b/],["Snow",/\b(snow|snowing|snowed)\b/],["Frost/Ice",/\b(frost|frosty|ice|icy)\b/]];
+  const wx = W.filter(w => w[1].test(low) && WEATHER.indexOf(w[0]) >= 0).map(w => w[0]);
+  if (wx.length){ d.weather = wx; done.push("Weather: " + esc(wx.join(", "))); }
+  vfSetNotes(d, "shift_activities", raw); done.push("Your words are in: Shift activities");
+  const dl = vfPick(raw, /\b(delay|delayed|held up|waiting on|waited|access|stood down|rained off)\b/);
+  if (dl){ vfSetNotes(d, "delay_detail", dl); done.push("Delay details filled in"); todo.push("Delays: tick Yes or No yourself."); }
+  const mt = vfPick(raw, /\b(material|materials|delivered|delivery|imported|exported|tonnes?|loads? of|purchased|bought|supplied)\b/);
+  if (mt){ vfSetNotes(d, "materials", mt); done.push("Materials filled in"); }
+  const sf = vfPick(raw, /\b(safety|incident|near miss|hazard|injur\w*|spill|unsafe|ncr)\b/);
+  if (sf){ vfSetNotes(d, "safety_notes", sf); done.push("Safety notes filled in"); }
+  const vr = vfPick(raw, /\b(variation|extra work|outside (?:the )?scope|client asked|additional works?)\b/);
+  if (vr){ vfSetNotes(d, "variation_detail", vr); done.push("Variation details filled in"); todo.push("Variation: tick Yes or No yourself."); }
+  todo.push("Progress photos, yes/no answers and your sign-off are always done by you.");
+  VF.result = { done, todo }; f.updatedAt = Date.now(); save(); render();
+  toast("Filled in. Check it, then save.");
+}
+
 function vfApply(){
   if (!CURRENT_FORM) return;
+  if (CURRENT_FORM.templateId === "MCK-Daily-Timesheet" || CURRENT_FORM.templateId === "MCK-Daily-Report"){
+    const r0 = (VF.text || "").trim(); if (!r0){ toast("Say or type about your day first"); return; }
+    return CURRENT_FORM.templateId === "MCK-Daily-Timesheet" ? vfApplyTimesheet(r0) : vfApplyDaily(r0);
+  }
   if (CURRENT_FORM.templateId !== "MCK-Maint-Log") return gvApply();
   const raw = (VF.text || "").trim();
   if (!raw){ toast("Say or type what you did first"); return; }
@@ -525,7 +642,11 @@ document.addEventListener("visibilitychange", () => { if (document.hidden && VF.
 function vfPanel(f, generic){
   if (VF.formId !== f.id){ VF.formId = f.id; VF.text = ""; VF.result = null; VF.active = false; }
   const r = VF.result;
-  const intro = generic
+  const intro = (f.templateId === "MCK-Daily-Timesheet")
+    ? `Tap the microphone and talk through your day: when you started, lunch, when you finished, which job, and what you did. For example: <em>"Started at six thirty, half an hour for lunch, finished at four thirty. At Mary Street, did the pipe laying and backfill."</em> Your times and hours are worked out for you. Photos, the fatigue check and your signature are left for you.`
+    : (f.templateId === "MCK-Daily-Report")
+    ? `Tap the microphone and talk through the day: the job, the weather, what was done, any delays, materials in or out, and any safety issue. Your words go in the report and each part goes to its own box. Yes/No answers, photos and your sign-off are left for you.`
+    : generic
     ? `Tap the microphone and talk through it: what you found or did, the date, and any choice from a list by name. Your words go in the notes box, and anything you name that matches a list is picked for you. Tick-box checks and signatures are always left for you.`
     : `Tap the microphone and say which machine, what you did, the hours or km on the meter, anything you used, and whether it is safe to use. For example: <em>"Service on the Komatsu PC200, 4,500 hours, changed the engine oil and filters, used 15 litres of 15W-40, safe to use."</em>`;
   return `<div class="field"><div class="notice notice-info">
@@ -545,7 +666,7 @@ window.MCK_VF_GENERIC = function(t, f){
   const has = (t.sections||[]).some(s => (s.fields||[]).some(x => x.type === "textarea" || x.type === "select" || x.type === "chips"));
   return has ? vfPanel(f, true) : "";
 };
-window.MCK_VF = { toggle:vfToggle, apply:vfApply, set:v => { VF.text = v; }, parse:vfParse };
+window.MCK_VF = { toggle:vfToggle, apply:vfApply, set:v => { VF.text = v; }, parse:vfParse, times:vfTimesParse };
 
 /* ---------- Template: the Maintenance Record ---------- */
 TEMPLATES.push({
