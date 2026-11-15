@@ -583,6 +583,8 @@
   /* ---------- Weekly inspections due every Friday, only on active jobs ---------- */
   const WEEKLY_FRIDAY = ["safety-inspection", "enviro-monitor", "safety-monitor"];
   if (typeof RECURRING_COMPLIANCE !== "undefined") RECURRING_COMPLIANCE.forEach(i => { if (WEEKLY_FRIDAY.indexOf(i.key) > -1) i.weekday = 5; });
+  /* Asbestos register is a company-wide review, not a per-job inspection */
+  if (typeof RECURRING_COMPLIANCE !== "undefined") RECURRING_COMPLIANCE.forEach(i => { if (i.key === "asbestos-register"){ i.scope = "company"; delete i.projectField; } });
   const DAY = 86400000;
   function mondayOf(ts){ const d = new Date(ts); d.setHours(0,0,0,0); const wd = (d.getDay() + 6) % 7; return d.getTime() - wd * DAY; }
   if (typeof complianceStatus === "function"){
@@ -624,7 +626,8 @@
       const configured = (typeof PROJECT_COMPLIANCE_CONFIG !== "undefined") && Array.isArray(PROJECT_COMPLIANCE_CONFIG[p]);
       const hasPreset = Object.keys(PRESETS).some(k => PRESETS[k].data.js_project === p);
       if (!configured && !jobFor(p) && !hasPreset) return [];
-      return origList(p);
+      const skip = (window.MCK_PROJ && p === MCK_PROJ.RR) ? ["water-quality"] : [];
+      return origList(p).filter(i => skip.indexOf(i.key) < 0);
     };
   }
 
@@ -768,6 +771,10 @@
       const f = fs.find(fm => fm.templateId === "MCK-Hygiene-Record" && (fm.data||{}).hy_machine === it.machine && (fm.createdAt||0) >= after);
       return f ? { done:f } : {};
     }
+    if (it.tid === "MCK-Utility-Locate" && isRRp(p) && MCK_PROJ.LOCATE){
+      const L = MCK_PROJ.LOCATE, rec = fs.find(fm => fm.templateId === it.tid);
+      return { done: rec || { createdAt: dayTs(L.date) }, live:true, note: L.company + " " + L.ref + " (" + dmy(dayTs(L.date)) + ")" + (L.cleared ? "; Telstra potholed July 2026" : "") };
+    }
     const pool = [[it.tid, it.sig]].concat(it.alt || []);
     let hits = fs.filter(fm => pool.some(([t, s]) => fm.templateId === t && signed(fm, s)));
     if (it.final) hits = dt.end ? hits.filter(fm => (fm.createdAt||0) >= dt.end - 7 * DAY) : [];
@@ -794,6 +801,7 @@
     const naKey = it.tid + (it.machine ? "|" + it.machine : "");
     const naLink = job && !r.done ? " · " + a(r.na ? "needed" : "not needed", `MCK_JOB.rmNA('${q(p)}','${q(naKey)}')`) : "";
     if (r.na) return naLink.slice(3);
+    if (r.live) return a("live locate", "nav('projectinfo')") + (r.done.id ? " · " + a("record", `nav('form',{id:'${r.done.templateId}',formId:'${r.done.id}'})`) : " · " + a("add record", `MCK_JOB.startForProject('${it.tid}')`));
     if (r.done && !it.daily) return a("open", `nav('form',{id:'${r.done.templateId}',formId:'${r.done.id}'})`);
     if (r.draft) return a("finish it", `nav('form',{id:'${r.draft.templateId}',formId:'${r.draft.id}'})`) + naLink;
     if (it.tid === "MCK-Toolbox-JobStart" && job) return a("start", `MCK_JOB.startToolbox('${job.id}')`) + naLink;
