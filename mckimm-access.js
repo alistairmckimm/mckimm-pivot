@@ -171,4 +171,19 @@
     timesheet: setUserTimesheet, restrict: restrictUser, liftRestriction: liftUserRestriction, jobsOf
   };
   window.openJobAccess = openJobAccess;
+
+  /* add "Who can see this job" to the job page (built in mckimm-jobstart.js) */
+  try {
+    const cv = window.CUSTOM_VIEWS || {};
+    if (typeof cv.job === "function") {
+      const origJob = cv.job;
+      cv.job = function(m){
+        origJob(m);
+        const h1 = m.querySelector("h1");
+        const job = STATE.activeFolder;
+        if (h1 && job && !m.querySelector("#jobWho")) h1.insertAdjacentHTML("afterend",
+          `<div id="jobWho" style="margin:0 0 10px"><button class="btn" onclick="openJobAccess('${jq(job)}')">&#128101; Who can see this job</button></div>`);
+      };
+    }
+  } catch(e){}
 })();

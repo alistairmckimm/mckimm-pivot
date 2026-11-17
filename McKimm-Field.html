@@ -414,9 +414,12 @@ body{ background:var(--bg); }
 <script src="mckimm-training.js"></script>
 <script src="mckimm-sops2.js"></script>
 <script src="mckimm-sitemaint.js"></script>
+<script src="mckimm-jobstart.js"></script>
+<script src="mckimm-program.js"></script>
 <script src="mckimm-nstc.js"></script>
 <script src="mckimm-access.js"></script>
 <script src="mckimm-sync.js"></script>
+<script src="mckimm-fieldsup.js"></script>
 <script src="mckimm-brand.js"></script>
 <script>
 /* ============================================================
@@ -528,12 +531,14 @@ function renderOperatorHome(m){
   }
 
   const _ls = window.MCK_PROJ ? MCK_PROJ.locateStatus() : null;
-  const projCard = (window.MCK_PROJ && projectOptions.includes(MCK_PROJ.RR)) ? `
+  const _isNSTC = STATE.fieldProject === "NSTC";
+  const _isRR = window.MCK_PROJ && STATE.fieldProject === MCK_PROJ.RR;
+  const projCard = ((_isRR || _isNSTC) && projectOptions.includes(STATE.fieldProject)) ? `
       <div class="card op-card" style="cursor:default">
-        <div class="row"><div class="icn">📌</div>${_ls && _ls.expired ? '<span class="status wait">Locate expired</span>' : '<span class="status">Info</span>'}</div>
+        <div class="row"><div class="icn">📌</div>${_isRR && _ls && _ls.expired ? '<span class="status wait">Locate expired</span>' : '<span class="status">Info</span>'}</div>
         <div class="title">Project Requirements</div>
-        <div class="sub">Rockwell Road — Council hold points, spec, locate photos, documents to sign</div>
-        <button class="btn primary" style="margin-top:10px;width:100%" onclick="nav('projectinfo')">Open</button>
+        <div class="sub">${_isNSTC ? "NSTC — stages, ITPs, ecology, approvals, emergency contacts" : "Rockwell Road — Council hold points, spec, locate photos, documents to sign"}</div>
+        <button class="btn primary" style="margin-top:10px;width:100%" onclick="${window.MCK_NSTC ? "MCK_NSTC.show('" + (_isNSTC ? "NSTC" : "RR") + "');" : ""}nav('projectinfo')">Open</button>
       </div>` : "";
   const maintCard = `
       <div class="card op-card" style="cursor:default">
@@ -609,6 +614,10 @@ function renderOperatorHome(m){
     <div class="notice notice-info" style="margin-top:8px">Only shown here for 24 hours so your admin can talk through today's and yesterday's work with you — it stays saved permanently once synced.</div>
   ` : "";
 
+  if (!restrictedTemplates && window.MCK_FS){
+    m.innerHTML = MCK_FS.render({ today, quickCards, recentHtml, availableMachinery });
+    return;
+  }
   m.innerHTML = `
     <h1 class="page-title">G'day, ${esc(STATE.currentUser)}</h1>
     ${window.MCK_SYNC ? MCK_SYNC.banner() : ""}
@@ -644,6 +653,7 @@ function renderOperatorHome(m){
 
     <h2 class="section-title">Today — ${fmtDate(today)}</h2>
     <div class="grid">${projCard}${quickCards}</div>
+    <div style="margin-top:14px">${window.MCK_JOB && MCK_JOB.crewCard ? MCK_JOB.crewCard(STATE.fieldProject) : ""}</div>
 
     ${recentHtml}
 
@@ -655,7 +665,7 @@ function renderOperatorHome(m){
     `}
   `;
 }
-window.CUSTOM_VIEWS = { operatorhome: renderOperatorHome };
+window.CUSTOM_VIEWS = Object.assign(window.CUSTOM_VIEWS || {}, { operatorhome: renderOperatorHome });
 
 /* ---------- Boot ---------- */
 const hash = location.hash.slice(1);

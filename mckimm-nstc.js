@@ -322,6 +322,24 @@
     if (typeof origRR === "function") { origRR(m); m.insertAdjacentHTML("afterbegin", tabs); }
   };
 
+  /* ---------- Job Start Checklist presets (so each job shows what is due) ----------
+     A job with no Job Start Checklist shows nothing due. These presets pre-fill the checklist for the
+     supervisor to review, tick the plant, and sign. Only facts Al has given are filled in. */
+  try {
+    if (window.MCK_JOB && MCK_JOB.PRESETS) {
+      const AL = "Alistair McKimm";
+      MCK_JOB.PRESETS.nstc = { label:"NSTC", data:{
+        js_project: NSTC,
+        js_crew: [AL, "Simon Story", "William Westaway"],
+        js_plant: [],
+        js_tasks: ["Excavation and trenching", "Underground services and potholing", "Refuelling on site", "Erosion and sediment control, washdown"],
+        js_other: "Design and construct contract, about $750,000: bulk and minor earthworks, drainage, concrete, with an ITP for the placement of everything. Minor works to set up and mobilise in the new year. Still to confirm: client, contract number, dates, approvals, hold points, nearest hospital and the plant that will be used (tick it above)."
+      } };
+      MCK_JOB.PRESETS.biathlon = { label:"NSW Biathlon", data:{ js_project:"NSW Biathlon - Barry Way Jindabyne", js_crew:[AL], js_plant:[], js_tasks:[], js_other:"" } };
+      MCK_JOB.PRESETS.depot = { label:"Depot Maintenance", data:{ js_project:"Depot Maintenance", js_crew:[AL], js_plant:[], js_tasks:[], js_other:"" } };
+    }
+  } catch(e){ console.warn("job presets", e); }
+
   window.MCK_NSTC = {
     NSTC,
     show(which){ STATE.projectInfoJob = which; try { save(); } catch(e){} render(); },

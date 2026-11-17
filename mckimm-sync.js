@@ -134,7 +134,26 @@
         <div class="grid" style="margin-top:10px">${company.map(complianceCard).join("") || `<div class="notice notice-info">Nothing due.</div>`}</div></details>`;
   }
 
-  window.MCK_SYNC = { makeCode, applyCode, linkParam, copyCode, connect, now, banner, board, pendingCount };
+  function doneTable(job){
+    const forms = STATE.forms.filter(f => f.folder === job || Object.values(f.data || {}).some(v => v === job))
+      .sort((a,b) => (b.updatedAt||b.createdAt||0) - (a.updatedAt||a.createdAt||0)).slice(0, 30);
+    return `<div class="list"><table>
+        <thead><tr><th>Form</th><th>By</th><th>Status</th><th>When</th></tr></thead>
+        <tbody>
+          ${forms.length ? forms.map(f => {
+            const t = templateById(f.templateId);
+            return `<tr onclick="nav('form',{id:'${f.templateId}',formId:'${f.id}'})"><td>${esc((t && t.name) || f.templateId)}</td><td>${esc(f.createdBy || "")}</td>
+              <td><span class="status wait">${esc(f.workflowColumn || "")}</span>${f._syncPending ? ` <span class="status wait">Not sent yet</span>` : ``}</td><td>${fmtDateTime(f.updatedAt || f.createdAt)}</td></tr>`;
+          }).join("") : `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:22px">Nothing recorded on this job in the last 48 hours.</td></tr>`}
+        </tbody></table></div>`;
+  }
+  function companyDue(){
+    const company = companyComplianceList().filter(c => c.status !== "ok").sort((a,b) => a.dueTs - b.dueTs);
+    return `<details style="margin-top:18px"><summary style="cursor:pointer;font-weight:600">Company-wide checks due (${company.length})</summary>
+        <div class="grid" style="margin-top:10px">${company.map(complianceCard).join("") || `<div class="notice notice-info">Nothing due.</div>`}</div></details>`;
+  }
+
+  window.MCK_SYNC = { makeCode, applyCode, linkParam, copyCode, connect, now, banner, board, pendingCount, doneTable, companyDue };
 
   /* Pivot dashboard: show the sync status box above the dashboard */
   if (window.MCKIMM_APP !== "field" && typeof window.renderDashboard === "function") {
