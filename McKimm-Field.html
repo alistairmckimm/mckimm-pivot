@@ -416,6 +416,7 @@ body{ background:var(--bg); }
 <script src="mckimm-sitemaint.js"></script>
 <script src="mckimm-nstc.js"></script>
 <script src="mckimm-access.js"></script>
+<script src="mckimm-sync.js"></script>
 <script src="mckimm-brand.js"></script>
 <script>
 /* ============================================================
@@ -610,6 +611,7 @@ function renderOperatorHome(m){
 
   m.innerHTML = `
     <h1 class="page-title">G'day, ${esc(STATE.currentUser)}</h1>
+    ${window.MCK_SYNC ? MCK_SYNC.banner() : ""}
     ${renderComplianceAlertBanner()}
     <div class="notice notice-info" style="margin-bottom:16px">Photos taken inside any form below are stamped automatically with the date, time and your name — no extra step needed.</div>
 
@@ -644,6 +646,8 @@ function renderOperatorHome(m){
     <div class="grid">${projCard}${quickCards}</div>
 
     ${recentHtml}
+
+    ${(!restrictedTemplates && window.MCK_SYNC) ? MCK_SYNC.board(STATE.fieldProject) : ""}
 
     ${restrictedTemplates ? `` : `
     <h2 class="section-title">Need something else?</h2>

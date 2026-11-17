@@ -3246,9 +3246,11 @@ async function attemptSyncForm(form){
       Object.assign(form, data.form);
     }
     delete form._syncPending; form._syncedAt = form.updatedAt || form.createdAt || Date.now();
+    STATE.lastSendOkAt = Date.now(); delete STATE.lastSyncError;
     return true;
   } catch(e){
     form._syncPending = true;
+    STATE.lastSyncError = String(e && e.message || e);
     return false;
   }
 }
@@ -3266,6 +3268,7 @@ async function flushPendingSyncs(){
       if (ok) changed = true;
     }
     if (changed) localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+    if (typeof render === "function" && changed) render();
   } finally {
     SYNC_IN_FLIGHT = false;
   }
@@ -3274,13 +3277,18 @@ async function pullSyncedForms(){
   if (!syncReady()) return;
   try {
     let url;
-    if (MCKIMM_APP === "field"){
+    const fieldSupervisor = (MCKIMM_APP === "field" && typeof hasFullAccess === "function" && hasFullAccess(STATE.currentUser));
+    if (fieldSupervisor){
+      // supervisors see everyone's work from the last 48 hours on the phone, so they can see what has been done on each job
+      url = syncUrl("/sync/list") + "?scope=all&since=" + (STATE.fieldSupPull || (Date.now() - 48*3600*1000));
+    } else if (MCKIMM_APP === "field"){
       url = syncUrl("/sync/list") + "?scope=mine&user=" + encodeURIComponent(STATE.currentUser) + "&hours=24";
     } else {
       url = syncUrl("/sync/list") + "?scope=all&since=" + (STATE.lastSyncPull||0);
     }
     const res = await fetch(url, { headers:{ "Authorization":"Bearer "+STATE.auditWorkerToken.trim() } });
-    if (!res.ok) return;
+    if (!res.ok) { STATE.lastSyncError = "Server said " + res.status; return; }
+    STATE.lastPullOkAt = Date.now();
     const data = await res.json();
     const incoming = Array.isArray(data.forms) ? data.forms : [];
     incoming.forEach(serverForm=>{
@@ -3299,12 +3307,16 @@ async function pullSyncedForms(){
       // their own view 24h after creation, once we're sure they're safely
       // synced — still fully retained server-side / on the desktop app.
       const cutoff = Date.now() - 24*3600*1000;
+      const supCutoff = Date.now() - 48*3600*1000;
       STATE.forms = STATE.forms.filter(f=>{
         const isMine = f.createdBy === STATE.currentUser;
         const isOld = (f.createdAt||0) < cutoff;
         const safeToPrune = !needsSync(f);
-        return !(isMine && isOld && safeToPrune);
+        if (isMine) return !(isOld && safeToPrune);
+        // someone else's form (supervisor view): keep 48 hours, never touch anything not yet synced
+        return !(fieldSupervisor && (f.createdAt||0) < supCutoff && safeToPrune);
       });
+      if (fieldSupervisor) STATE.fieldSupPull = (data.more && data.until) ? data.until : Date.now();
     }
     STATE.lastSyncPull = (data.more && data.until) ? data.until : Date.now();
     localStorage.setItem(LS_KEY, JSON.stringify(STATE));
@@ -4780,6 +4792,12 @@ function createForm(templateId, prefill={}){
     activity: [{who:STATE.currentUser, when:Date.now(), what:"Created v1"}]
   };
   if (window.MCK_PROJ) { try { MCK_PROJ.onCreate(f, t); } catch(e){ console.error("project prefill", e); } }
+  // file the form under the job it is for (so phone forms land in the right job on the desktop)
+  ["project_location","project","project_name","project_site","site_location","location"].some(k => {
+    const v = f.data && f.data[k];
+    if (v && PROJECT_LOCATIONS.indexOf(v) > -1){ f.folder = v; return true; }
+    return false;
+  });
   STATE.forms.push(f); save();
   return f;
 }

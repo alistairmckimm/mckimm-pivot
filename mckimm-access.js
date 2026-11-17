@@ -25,7 +25,8 @@
   function phoneLinkFor(u){
     let base;
     try { base = new URL("McKimm-Field.html", location.href).href; } catch(e){ base = "McKimm-Field.html"; }
-    return base + "?user=" + encodeURIComponent(u);
+    const sp = (window.MCK_SYNC && MCK_SYNC.linkParam) ? MCK_SYNC.linkParam() : "";
+    return base + "?user=" + encodeURIComponent(u) + (sp ? "&" + sp : "");
   }
   try {
     const q = new URLSearchParams(location.search);
@@ -36,7 +37,7 @@
 
   function copyPhoneLink(u){
     const link = phoneLinkFor(u);
-    const done = () => toast("Phone link for " + u + " copied. Text it to them and ask them to open it once.");
+    const done = () => toast("Phone link for " + u + " copied (it includes the sync key, so send it only to them). Ask them to open it once.");
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(link).then(done, () => window.prompt("Copy this link:", link)); return; }
     } catch(e){}
@@ -155,6 +156,7 @@
       <div class="toolbar">
         <div class="grow"></div>
         ${(OPERATOR_CONFIG_DIRTY || TEAM_CONFIG_DIRTY) ? `<span class="status wait" style="margin-right:8px">Unpublished changes</span>` : ``}
+        <button class="btn" onclick="MCK_SYNC.copyCode()" title="Paste this into the red box on a phone that is not connected yet">Copy phone setup code</button>
         <button class="btn" onclick="addUser()">+ Add user</button>
         <button class="btn primary" onclick="publishTeam()">Publish changes to team</button>
       </div>
