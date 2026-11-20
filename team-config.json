@@ -17,6 +17,7 @@
     "Rockwell Road Intersection, Berridale",
     "NSW Biathlon - Barry Way Jindabyne",
     "Depot Maintenance",
+    "TENNIS COURT Office of Sport & Rec",
     "Other (see comments)"
   ],
   "archivedProjects": [
@@ -35,6 +36,12 @@
     "Snowy Mountain Grammar SMEGS",
     "Sport and Recreation access Road"
   ],
-  "projectCompliance": {},
-  "rev": 2
+  "projectCompliance": {
+    "TENNIS COURT Office of Sport & Rec": [
+      "safety-inspection",
+      "safety-monitor",
+      "permits-check"
+    ]
+  },
+  "rev": 3
 }

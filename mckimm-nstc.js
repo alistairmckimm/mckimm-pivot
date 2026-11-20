@@ -336,9 +336,101 @@
         js_other: "Design and construct contract, about $750,000: bulk and minor earthworks, drainage, concrete, with an ITP for the placement of everything. Minor works to set up and mobilise in the new year. Still to confirm: client, contract number, dates, approvals, hold points, nearest hospital and the plant that will be used (tick it above)."
       } };
       MCK_JOB.PRESETS.biathlon = { label:"NSW Biathlon", data:{ js_project:"NSW Biathlon - Barry Way Jindabyne", js_crew:[AL], js_plant:[], js_tasks:[], js_other:"" } };
+      MCK_JOB.PRESETS.tennis = { label:"Tennis Courts (Office of Sport and Recreation)", data:{
+        js_project: "TENNIS COURT Office of Sport & Rec",
+        js_crew: [AL],
+        js_plant: [],
+        js_tasks: ["Bitumen emulsion spray sealing", "Concrete cutting (silica dust)", "Refuelling on site", "Hazardous chemicals", "Erosion and sediment control, washdown", "Subcontractors or visitors on site"],
+        js_other: "Not a civil job: lift, scrape back, grind, seal (bitumen emulsion and stone, or asphalt) and relay about 20 x 20 m of synthetic tennis court turf for the Office of Sport and Recreation. The machines are already on the OSR site. Existing high fencing is in place, so confirm the gates are secured and the public is kept off the courts. Manual handling of rolled turf. Contaminant and glue waste to be disposed of correctly. Client site induction and access to be confirmed. DRAFT: tick the plant, set the dates and confirm the crew."
+      } };
       MCK_JOB.PRESETS.depot = { label:"Depot Maintenance", data:{ js_project:"Depot Maintenance", js_crew:[AL], js_plant:[], js_tasks:[], js_other:"" } };
     }
   } catch(e){ console.warn("job presets", e); }
+
+  /* ---------- Tennis court turf relay (Office of Sport and Recreation) ----------
+     Not a civil job: lift the synthetic turf, scrape the base back, grind, seal (bitumen emulsion and stone, or asphalt)
+     and relay the turf. Al (20 Nov 2026): no underground services locate, heritage, ecology, environmental risk inspection,
+     water quality or environmental monitoring, concrete or machinery hygiene (the machines are already on the OSR site).
+     The quality side is two ITPs (surfacing, then turf). Nothing here quotes a specification value: rates, thicknesses and
+     tolerances come from the adhesive / emulsion / asphalt supplier and are written into the form. */
+  const TENNIS = "TENNIS COURT Office of Sport & Rec";
+  const TENNIS_OFF = ["MCK-Utility-Locate", "MCK-Enviro-Heritage", "MCK-Eco-Internal", "MCK-Eco-ThirdParty", "MCK-Enviro-SiteRisk", "MCK-Hygiene-Record", "MCK-Enviro-Monitor", "MCK-CQ"];
+  const TENNIS_RECURRING = ["safety-inspection", "safety-monitor", "permits-check"];
+
+  const surfacing = itp({ id:"MCK-ITP-Surfacing", icon:"🛣️",
+    name:"ITP: Base Preparation and Surfacing (emulsion and stone, or asphalt)",
+    instructions:"Inspection and Test Plan for preparing and sealing a base before turf or other surfacing goes on: lift, scrape, grind, repair, clean, then bitumen emulsion and stone, or asphalt. One form for each court or area. The rates, thicknesses, temperatures and cure times come from the adhesive, emulsion or asphalt supplier and the client's specification: write them in the tables, do not guess them. Each hold point (H) is signed before the next step starts.",
+    groups:[
+      { title:"Before work starts", items:[
+        ["S","Scope, method and the supplier's written substrate requirements (adhesive, turf, emulsion or asphalt) are on site and current"],
+        ["H","Base type confirmed by a test patch or core (asphalt or concrete), thickness and condition recorded, and the preparation method agreed for it"],
+        ["S","Old coating, glue and backing checked for hazardous material where there is any doubt, and the result recorded"],
+        ["S","Silica dust controls ready (wet cutting or extraction, respirators) and wash water and slurry plan set so nothing reaches a drain"],
+        ["W","Client told: access, gates secured, public kept off the courts, working hours and court bookings"] ]},
+      { title:"Stripping and preparation", items:[
+        ["S","Turf lifted in marked strips, rolled, labelled and stored flat and off the ground"],
+        ["S","Old glue, coating, topping and loose material scraped back to the sound base without gouging it"],
+        ["H","Surface ground or milled to a sound, even profile as the method says; loose and delaminated areas removed"],
+        ["H","Cracks and low spots repaired; falls checked and ponding checked (hose test) and recorded"],
+        ["H","Surface swept, blown and washed clean and left to dry; moisture checked before any sealing"] ]},
+      { title:"Emulsion and stone, or asphalt", items:[
+        ["H","System chosen (emulsion and stone, or asphalt) and approved by the designer or adhesive supplier before it is used"],
+        ["S","Weather suitable for the product (dry, temperature within the supplier's range) and recorded"],
+        ["H","Emulsion: type, batch and application rate recorded; sprayed evenly with no pooling or missed strips"],
+        ["S","Stone or sand: type, size and spread rate recorded; spread evenly; excess swept off"],
+        ["S","Asphalt (if used): mix type, thickness, delivery temperature and docket recorded; laid and compacted as specified"],
+        ["H","Cure or break time observed as the supplier states before anything goes on top"],
+        ["S","Finished surface checked: levels and falls, no ponding, no loose stone, edges tied in"] ]},
+      { title:"Environment", items:[
+        ["S","Emulsion, slurry, wash water and glue waste kept out of drains and the soil; spill kit on site"],
+        ["S","Waste (old glue, coating, grindings, packaging) removed to the right skip or disposal point and dockets kept"] ]}
+    ],
+    tables:[
+      { title:"Materials and rates", label:"Materials used (write the required rate or thickness from the supplier or specification)", columns:["Material (emulsion, stone, asphalt, primer)","Supplier / batch / docket no.","Required rate or thickness","Actual","Where used","Pass / Fail"] }
+    ]
+  });
+
+  const turf = itp({ id:"MCK-ITP-Turf", icon:"🎾",
+    name:"ITP: Synthetic Turf Relay (glue-down)",
+    instructions:"Inspection and Test Plan for re-laying or laying synthetic turf on a prepared base. Do it after the Base Preparation and Surfacing ITP is signed. The adhesive, spread rate, open time and cure time come from the adhesive and turf suppliers: write them in the table. Each hold point (H) is signed before the next step starts.",
+    groups:[
+      { title:"Before laying", items:[
+        ["H","Base released: the Base Preparation and Surfacing ITP is signed and the base is clean and dry (moisture check recorded)"],
+        ["H","Adhesive and primer are the types the supplier states for this base; batch and use-by date recorded"],
+        ["S","Turf backing cleaned (method proven on an offcut first); damage, shrinkage and seams checked; reuse or replace decision recorded"],
+        ["S","Weather within the adhesive limits (temperature, humidity, no rain before cure) and recorded"] ]},
+      { title:"Laying", items:[
+        ["S","Turf laid to the marks with the pile direction matching, and line markings lined up"],
+        ["H","Adhesive applied at the supplier's spread rate and the open time not exceeded"],
+        ["S","Turf pressed or rolled into the adhesive with no bubbles, lifting or wrinkles"],
+        ["S","Seams and edges bonded and tight, with no gaps or raised joins"],
+        ["H","Adhesion checked on a test area as the supplier requires and the result recorded"] ]},
+      { title:"Finishing", items:[
+        ["S","Infill sand replaced to the required depth and brushed in"],
+        ["S","Cure time before use recorded and the client told when the court can be used"],
+        ["W","Client walk-through and acceptance"],
+        ["S","Waste removed, area cleaned, photos taken"] ]}
+    ],
+    tables:[
+      { title:"Adhesive and product record", label:"Adhesive, primer and turf (write the required spread rate and open time from the supplier)", columns:["Product","Batch / use-by","Required spread rate / open time","Actual","Temp / humidity","Notes"] }
+    ]
+  });
+  [surfacing, turf].forEach(t => { const i = TEMPLATES.findIndex(x => x.id === t.id); if (i > -1) TEMPLATES[i] = t; else TEMPLATES.push(t); });
+
+  /* Job Roadmap for this job: take out what does not apply, add the quality stage */
+  window.MCK_RM_HOOKS = window.MCK_RM_HOOKS || [];
+  window.MCK_RM_HOOKS.push(function(p, phases){
+    if (p !== TENNIS) return phases;
+    const out = phases.map(P => Object.assign({}, P, { items: (P.items || []).filter(it => !(it.tid && TENNIS_OFF.indexOf(it.tid) > -1) && !it.machine) }));
+    const q = { key:"quality", title:"Quality: base preparation, surfacing and turf relay", dueLabel:"stage by stage as the work is done", due:0, items:[
+      { tid:"MCK-ITP-Surfacing", sig:["contractor_signature"], label:"ITP: base preparation and surfacing (emulsion and stone, or asphalt)", why:"Scrape, grind, repair, clean, seal. Hold points signed before the turf goes down" },
+      { tid:"MCK-ITP-Turf", sig:["contractor_signature"], label:"ITP: turf relay (glue-down)", why:"Adhesive, laying, seams, adhesion check, client acceptance" }
+    ] };
+    const at = out.findIndex(P => P.recurring);
+    out.splice(at > -1 ? at : out.length, 0, q);
+    return out;
+  });
+  if (typeof PROJECT_COMPLIANCE_CONFIG !== "undefined" && !Array.isArray(PROJECT_COMPLIANCE_CONFIG[TENNIS])) PROJECT_COMPLIANCE_CONFIG[TENNIS] = TENNIS_RECURRING.slice();
 
   window.MCK_NSTC = {
     NSTC,

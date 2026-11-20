@@ -699,7 +699,7 @@
     const isRR = window.MCK_PROJ && p === MCK_PROJ.RR;
     const dt = rmDates(p);
     const I = (tid, sig, label, why, more) => Object.assign({ tid, sig: sig ? [].concat(sig) : null, label, why }, more || {});
-    return [
+    const PH = [
       { key:"plan", title:"1. Before mobilising: planning and approvals", due:dt.mob, dueLabel:"before mobilisation", items:[
         I("MCK-Job-Start", "js_signature", "Job Start Checklist: crew, plant and tasks", "Sets which SOPs and SWMS each worker must sign"),
         I("MCK-WHS-SWMS", "supervisor_signature", "Construction RAMS (site risk assessment)", "Site-specific hazards and controls"),
@@ -750,6 +750,8 @@
         I("MCK-Project-Handover", "mckimm_signature", "Project handover checklist", "Signed by McKimm Civil and the client")
       ].filter(Boolean) }
     ];
+    /* Job profiles (e.g. mckimm-nstc.js) can add, remove or rename roadmap items for one job: window.MCK_RM_HOOKS.push((jobName, phases) => phases) */
+    return (window.MCK_RM_HOOKS || []).reduce((acc, h) => { try { return h(p, acc) || acc; } catch(e){ return acc; } }, PH);
   }
   function rmEval(p, it){
     const fs = formsForProject(p), job = jobFor(p), na = arr(((job||{}).data||{}).rm_na);
